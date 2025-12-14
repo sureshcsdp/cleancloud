@@ -1,0 +1,92 @@
+from datetime import datetime, timezone
+from typing import List
+
+from azure.mgmt.compute import ComputeManagementClient
+
+from cleancloud.models.confidence import Confidence, Risk
+from cleancloud.models.finding import Finding
+
+MIN_AGE_DAYS_HIGH = 14
+MIN_AGE_DAYS_MEDIUM = 7
+
+
+def _age_in_days(created_at: datetime) -> int:
+    now = datetime.now(timezone.utc)
+    return (now - created_at).days
+
+
+def find_unattached_managed_disks(
+    *,
+    subscription_id: str,
+    credential,
+    region_filter: str = None,
+) -> List[Finding]:
+    """
+    Find unattached Azure managed disks that are likely orphaned.
+
+    Signals used:
+    - Disk is not attached to any VM (managed_by is None)
+    - Disk age exceeds conservative thresholds
+
+    This function is read-only and safe.
+
+    IAM permissions:
+    - Microsoft.Compute/disks/read
+    """
+
+    findings: List[Finding] = []
+
+    compute_client = ComputeManagementClient(
+        credential=credential,
+        subscription_id=subscription_id,
+    )
+
+    for disk in compute_client.disks.list():
+        # Optional region filter (Azure uses 'location')
+        if region_filter and disk.location != region_filter:
+            continue
+
+        # ---- Primary signal: attachment state
+        if disk.managed_by is not None:
+            continue
+
+        # ---- Secondary signal: age
+        if not disk.time_created:
+            continue
+
+        disk_age_days = _age_in_days(disk.time_created)
+
+        if disk_age_days >= MIN_AGE_DAYS_HIGH:
+            confidence = Confidence.HIGH.value
+        elif disk_age_days >= MIN_AGE_DAYS_MEDIUM:
+            confidence = Confidence.MEDIUM.value
+        else:
+            # Too new – ignore completely
+            continue
+
+        findings.append(
+            Finding(
+                provider="azure",
+                rule_id="azure.unattached_managed_disk",
+                resource_type="azure.managed_disk",
+                resource_id=disk.id,
+                region=disk.location,
+                title="Unattached Azure managed disk",
+                summary=f"Disk not attached to any VM for {disk_age_days} days",
+                reason="Disk has no VM attachment and exceeds age threshold",
+                risk=Risk.LOW.value,
+                confidence=confidence,
+                detected_at=datetime.now(timezone.utc),
+                details={
+                    "resource_name": disk.name,
+                    "subscription_id": subscription_id,
+                    "managed_by": None,
+                    "age_days": disk_age_days,
+                    "sku": disk.sku.name if disk.sku else None,
+                    "size_gb": disk.disk_size_gb,
+                    "tags_present": bool(disk.tags),
+                },
+            )
+        )
+
+    return findings

@@ -1,0 +1,157 @@
+name: Main Branch Validation
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # =========================
+  # QUICK VALIDATION
+  # =========================
+  validate:
+    name: Validate Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,aws,azure]"
+
+      - name: Verify imports
+        run: |
+          python -c "from cleancloud.cli import main; print('✅ CLI imports')"
+          python -c "from cleancloud.models.finding import Finding; print('✅ Models import')"
+          python -c "from cleancloud.providers.aws.session import create_aws_session; print('✅ AWS imports')"
+          python -c "from cleancloud.providers.azure.session import create_azure_session; print('✅ Azure imports')"
+
+      - name: Run linting
+        run: |
+          pip install ruff black
+          ruff check cleancloud/ || echo "⚠️  Linting warnings found"
+          black --check cleancloud/ || echo "⚠️  Formatting issues found"
+
+  # =========================
+  # INTEGRATION TESTS (REQUIRED - Must pass)
+  # =========================
+  integration-test-aws:
+    name: Integration Test - AWS (Required)
+    runs-on: ubuntu-latest
+    needs: validate
+    environment: cleancloud-test
+    # NO continue-on-error - failures will block
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CleanCloud
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,aws,azure]"
+
+      - name: Test AWS doctor (strict)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          set -e  # Exit on any error
+          cleancloud doctor --provider aws --region us-east-1
+
+      - name: Test AWS scan (strict)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          set -e  # Exit on any error
+          cleancloud scan --provider aws --region us-east-1 --output json --output-file test-results.json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-integration-main
+          path: test-results.json
+
+  integration-test-azure:
+    name: Integration Test - Azure (Required)
+    runs-on: ubuntu-latest
+    needs: validate
+    environment: cleancloud-test
+    # NO continue-on-error - failures will block
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CleanCloud
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,aws,azure]"
+
+      - name: Test Azure doctor (strict)
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          #AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -e  # Exit on any error
+          cleancloud doctor --provider azure
+
+      - name: Test Azure scan (strict)
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          #AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -e  # Exit on any error
+          cleancloud scan --provider azure --output json --output-file test-results.json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: azure-integration-main
+          path: test-results.json
+
+  # =========================
+  # NOTIFY ON FAILURE
+  # =========================
+  notify-failure:
+    name: Create Issue on Failure
+    runs-on: ubuntu-latest
+    needs: [validate, integration-test-aws, integration-test-azure]
+    if: failure()
+
+    steps:
+      - name: Create issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Main branch validation failed',
+              body: `Main branch validation failed.\n\n**Workflow run:** ${runUrl}\n**Commit:** ${context.sha}\n\n⚠️  Main branch may not be production-ready.`,
+              labels: ['bug', 'ci-failure', 'urgent']
+            });

@@ -1,19 +1,96 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "cleancloud"
 version = "0.1.0"
-description = "Cloud hygiene scanner for orphaned and unowned resources"
+description = "Safe, conservative cloud hygiene scanning for AWS and Azure"
+readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "boto3",
-    "click",
+license = {text = "MIT"}
+authors = [
+    {name = "CleanCloud", email = "suresh.csdp@gmail.com"}
+]
+keywords = ["aws", "azure", "cloud", "hygiene", "devops", "sre", "infrastructure"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
 ]
 
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+dependencies = [
+    "click>=8.0.0",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.optional-dependencies]
+aws = [
+    "boto3>=1.26.0",
+    "botocore>=1.29.0",
+]
+
+azure = [
+    "azure-identity>=1.15.0",
+    "azure-mgmt-resource>=23.0.0",
+    "azure-mgmt-compute>=30.0.0",
+    "azure-mgmt-network>=25.0.0",
+    "azure-core>=1.29.0",
+]
+
+all = [
+    "cleancloud[aws,azure]",
+]
+
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "black>=23.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/sureshcsdp/cleancloud"  # Update this
+Documentation = "https://github.com/sureshcsdp/cleancloud#readme"  # Update this
+Repository = "https://github.com/sureshcsdp/cleancloud"  # Update this
+Issues = "https://github.com/sureshcsdp/cleancloud/issues"  # Update this
 
 [project.scripts]
 cleancloud = "cleancloud.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cleancloud*"]
+exclude = ["tests*", "docs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=cleancloud --cov-report=term-missing"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
