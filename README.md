@@ -71,7 +71,7 @@ cleancloud scan --provider aws
 cleancloud scan --provider aws --output json --output-file results.json
 
 # CSV output
-cleancloud scan --provider azure --output csv --output-file results.csv
+cleancloud scan --provider aws --output csv --output-file results.csv
 ```
 
 ---
@@ -79,17 +79,9 @@ cleancloud scan --provider azure --output csv --output-file results.csv
 ## What CleanCloud Detects
 
 ### AWS Rules (4 currently)
-- **Unattached EBS volumes** - Volumes not attached to any EC2 instance
-- **Old EBS snapshots** - Snapshots older than 90 days (configurable)
-- **Inactive CloudWatch log groups** - Log groups with infinite retention
-- **Untagged resources** - EBS volumes, S3 buckets, log groups without tags
+See [`docs/rules.md`](docs/rules.md) for detailed rule behavior and confidence thresholds.
 
 ### Azure Rules (4 currently)
-- **Unattached managed disks** - Disks not attached to any VM (7+ days old)
-- **Old snapshots** - Snapshots older than 30 days
-- **Untagged resources** - Managed disks and snapshots without tags
-- **Unused public IPs** - Public IP addresses not attached to any resource
-
 See [`docs/rules.md`](docs/rules.md) for detailed rule behavior and confidence thresholds.
 
 ---
@@ -100,7 +92,7 @@ CleanCloud is designed for CI/CD pipelines with predictable exit codes and polic
 
 #### Recommended: GitHub Actions with AWS OIDC (No Secrets)
 
-CleanCloud supports AWS IAM Roles assumed via GitHub Actions OpenID Connect (OIDC).
+CleanCloud supports AWS IAM Roles assumed via **GitHub Actions OpenID Connect (OIDC)**.
 This is the recommended approach for CI/CD usage.
 
 **Benefits:**
@@ -203,7 +195,7 @@ cleancloud scan --provider aws
 **AWS IAM Policy (Minimum Read-Only Permissions)**
 
 Attach the following identity-based policy to the IAM role or user used by CleanCloud
-(including GitHub Actions OIDC roles):
+(**including GitHub Actions OIDC roles**):
 
 ```
 {
