@@ -1,99 +1,140 @@
-# Azure Setup Guide
+# Azure Setup & Rules
 
-Complete configuration guide for running CleanCloud against Azure subscriptions.
+Azure-specific authentication, RBAC permissions, and detailed rule specifications.
 
----
-
-## Overview
-
-CleanCloud scans Azure subscriptions to identify orphaned, untagged, and potentially inactive resources using **read-only APIs only**. No resources are ever modified, deleted, or tagged.
-
-**What CleanCloud detects:**
-- Unattached managed disks (7-14+ days old)
-- Old managed disk snapshots (30+ days)
-- Untagged managed disks and snapshots
-- Unused public IP addresses
-
-**What CleanCloud does NOT do:**
-- ❌ Delete or modify resources
-- ❌ Make cost optimization recommendations
-- ❌ Enforce policies automatically
-- ❌ Require billing/cost data access
+> **For general usage:** See [README.md](../README.md)  
+> **For CI/CD integration:** See [ci.md](ci.md)
 
 ---
 
-## Quick Start
+## Authentication
 
-### 1. Validate Credentials
+### 1. Azure OIDC with Workload Identity (Recommended for CI/CD)
 
+**Microsoft Entra ID Workload Identity Federation** - No client secrets, temporary tokens only.
+
+**Benefits:**
+- No `AZURE_CLIENT_SECRET` stored
+- Short-lived tokens (1 hour)
+- Enterprise security compliant
+- Consistent with AWS OIDC approach
+
+**Setup Steps:**
+
+**Step 1:** Create App Registration
 ```bash
-cleancloud doctor --provider azure
+az ad app create --display-name "CleanCloudScanner"
 ```
 
-This validates:
-- Azure service principal credentials are configured
-- Required RBAC permissions exist
-- Subscription access works
+**Step 2:** Create Service Principal
+```bash
+az ad sp create --id <APP_ID>
+```
 
-### 2. Run a Scan
+**Step 3:** Configure Federated Identity Credential
+```bash
+az ad app federated-credential create \
+  --id <APP_ID> \
+  --parameters '{
+    "name": "CleanCloudGitHub",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:YOUR_ORG/YOUR_REPO:ref:refs/heads/main",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+```
+
+Replace `YOUR_ORG/YOUR_REPO` with your repository.
+
+**Step 4:** Assign Reader Role
+```bash
+az role assignment create \
+  --assignee <APP_ID> \
+  --role "Reader" \
+  --scope /subscriptions/YOUR_SUBSCRIPTION_ID
+```
+
+**Step 5:** GitHub Actions Usage
+```yaml
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Run CleanCloud
+        run: |
+          pip install cleancloud
+          cleancloud scan --provider azure
+```
+
+**Required GitHub Secrets:**
+- `AZURE_CLIENT_ID` - App registration application ID
+- `AZURE_TENANT_ID` - Azure tenant ID
+- `AZURE_SUBSCRIPTION_ID` - Subscription to scan
+
+**No secret needed:** `AZURE_CLIENT_SECRET` ✅
+
+---
+
+### 2. Azure CLI (Local Development)
 
 ```bash
-# All accessible subscriptions
+# Login
+az login
+
+# Set subscription
+az account set --subscription YOUR_SUBSCRIPTION_ID
+
+# Run scan
 cleancloud scan --provider azure
-
-# Specific region filter
-cleancloud scan --provider azure --region eastus
-
-# Export to JSON
-cleancloud scan --provider azure --output json --output-file results.json
 ```
+
+CleanCloud automatically uses your active Azure CLI session.
 
 ---
 
 ## RBAC Permissions
 
-CleanCloud requires **read-only permissions** only.
+### Reader Role (Recommended)
 
-### Recommended Role Assignment
-
-Assign the built-in **Reader** role to your service principal:
+Built-in **Reader** role provides all required permissions:
 
 ```bash
-# Get your subscription ID
-az account show --query id -o tsv
-
-# Create service principal with Reader role
-az ad sp create-for-rbac \
-  --name "CleanCloudScanner" \
+az role assignment create \
+  --assignee <APP_ID> \
   --role "Reader" \
-  --scopes /subscriptions/{subscription-id}
+  --scope /subscriptions/YOUR_SUBSCRIPTION_ID
 ```
 
-This returns credentials needed for authentication (see below).
+**What Reader allows:**
+- ✅ `Microsoft.Compute/disks/read`
+- ✅ `Microsoft.Compute/snapshots/read`
+- ✅ `Microsoft.Network/publicIPAddresses/read`
+- ✅ `Microsoft.Resources/subscriptions/read`
 
-### What Reader Role Allows
-
-The Reader role provides read-only access to:
-- ✅ Microsoft.Compute/disks/read
-- ✅ Microsoft.Compute/snapshots/read
-- ✅ Microsoft.Network/publicIPAddresses/read
-- ✅ Microsoft.Resources/subscriptions/read
-
-### What Reader Role Does NOT Allow
-
+**What Reader does NOT allow:**
 - ❌ Delete operations (`*/delete`)
 - ❌ Modification operations (`*/write`)
 - ❌ Tagging operations (`Microsoft.Resources/tags/*`)
 - ❌ Billing data access (`Microsoft.CostManagement/*`)
 
-### Custom Role (Optional)
-
-If your organization requires least-privilege policies, create a custom role:
+### Custom Role (Optional Least-Privilege)
 
 ```json
 {
   "Name": "CleanCloud Scanner",
-  "Description": "Read-only access for CleanCloud hygiene scanning",
+  "Description": "Minimal read-only access for CleanCloud",
   "Actions": [
     "Microsoft.Compute/disks/read",
     "Microsoft.Compute/snapshots/read",
@@ -102,103 +143,88 @@ If your organization requires least-privilege policies, create a custom role:
   ],
   "NotActions": [],
   "AssignableScopes": [
-    "/subscriptions/{subscription-id}"
+    "/subscriptions/YOUR_SUBSCRIPTION_ID"
   ]
 }
 ```
 
-Save as `cleancloud-role.json` and create:
-
+Create and assign:
 ```bash
 az role definition create --role-definition cleancloud-role.json
 
 az role assignment create \
-  --assignee {service-principal-app-id} \
+  --assignee <APP_ID> \
   --role "CleanCloud Scanner" \
-  --scope /subscriptions/{subscription-id}
+  --scope /subscriptions/YOUR_SUBSCRIPTION_ID
 ```
 
 ---
 
-## Authentication
+## Subscription Scanning
 
-CleanCloud uses Azure service principal authentication via environment variables.
-
-### Required Environment Variables
+### Single Subscription (Default)
 
 ```bash
-export AZURE_CLIENT_ID="<service-principal-app-id>"
-export AZURE_TENANT_ID="<azure-tenant-id>"
-export AZURE_CLIENT_SECRET="<service-principal-password>"
+# Specify via environment
+export AZURE_SUBSCRIPTION_ID="12345678-1234-1234-1234-123456789abc"
+cleancloud scan --provider azure
+
+# Or via CLI login
+az account set --subscription YOUR_SUBSCRIPTION_ID
+cleancloud scan --provider azure
 ```
 
-### Optional Environment Variable
+### All Accessible Subscriptions
 
 ```bash
-# Scan only a specific subscription (otherwise scans all accessible)
-export AZURE_SUBSCRIPTION_ID="<subscription-id>"
+# Remove AZURE_SUBSCRIPTION_ID
+unset AZURE_SUBSCRIPTION_ID
+cleancloud scan --provider azure
 ```
 
-### Creating Service Principal Credentials
+CleanCloud scans all subscriptions the service principal can access.
+
+### Region Filtering
 
 ```bash
-# Create service principal and capture output
-az ad sp create-for-rbac \
-  --name "CleanCloudScanner" \
-  --role "Reader" \
-  --scopes /subscriptions/{subscription-id}
+# Scan only East US resources
+cleancloud scan --provider azure --region eastus
 
-# Output (save these values):
-{
-  "appId": "12345678-1234-1234-1234-123456789abc",      # → AZURE_CLIENT_ID
-  "displayName": "CleanCloudScanner",
-  "password": "abcdef123456...",                         # → AZURE_CLIENT_SECRET
-  "tenant": "87654321-4321-4321-4321-fedcba987654"      # → AZURE_TENANT_ID
-}
+# Scan only West Europe resources
+cleancloud scan --provider azure --region westeurope
 ```
-
-### Non-Interactive Authentication
-
-CleanCloud is designed for CI/CD and does NOT support:
-- ❌ Interactive browser login
-- ❌ Device code flow
-- ❌ Azure CLI credential passthrough
-
-This ensures CleanCloud works in:
-- ✅ GitHub Actions
-- ✅ GitLab CI
-- ✅ Jenkins
-- ✅ Kubernetes jobs
-- ✅ Headless environments
 
 ---
 
-## Rules
-
-CleanCloud implements 4 conservative, high-signal rules for Azure.
+## Azure Rules (4 Total)
 
 ### 1. Unattached Managed Disks
 
 **Rule ID:** `azure.unattached_managed_disk`
 
-**Detects:** Managed disks not attached to any virtual machine and older than 7-14 days.
+**Detects:** Disks not attached to any VM
 
-**Signals:**
-- `disk.managed_by == null` (not attached to VM)
-- Disk age ≥ 14 days (HIGH confidence)
-- Disk age ≥ 7 days (MEDIUM confidence)
+**Confidence:**
+- HIGH: Unattached ≥ 14 days
+- MEDIUM: Unattached 7-13 days
+- Not flagged: < 7 days
 
-**Why age thresholds:** IaC and autoscaling create temporary disks. Age filtering prevents false positives on legitimate short-lived resources.
+**Detection logic:**
+```python
+if disk.managed_by is None:  # Not attached
+    age_days = calculate_age(disk.time_created)
+    if age_days >= 14:
+        confidence = "HIGH"
+    elif age_days >= 7:
+        confidence = "MEDIUM"
+```
 
-**Confidence:** HIGH (14+ days), MEDIUM (7-13 days)  
-**Risk:** LOW
+**Required permission:** `Microsoft.Compute/disks/read`
 
 **Common causes:**
 - Disks from deleted VMs
 - Failed deployments
-- Autoscaling group churn
-
-**Required permission:** `Microsoft.Compute/disks/read`
+- Autoscaling cleanup gaps
 
 ---
 
@@ -206,23 +232,20 @@ CleanCloud implements 4 conservative, high-signal rules for Azure.
 
 **Rule ID:** `azure.old_snapshot`
 
-**Detects:** Managed disk snapshots older than 30-90 days.
+**Detects:** Snapshots older than configured thresholds
 
-**Signals:**
-- Snapshot age ≥ 90 days (HIGH confidence)
-- Snapshot age ≥ 30 days (MEDIUM confidence)
+**Confidence:**
+- HIGH: Age ≥ 90 days
+- MEDIUM: Age ≥ 30 days
 
-**Conservative approach:** Age-based only. Does NOT attempt to detect if snapshot is referenced by images or restore points (to avoid false positives).
+**Limitations:** Does NOT check if snapshot is referenced by images (by design, avoids false positives)
 
-**Confidence:** HIGH (90+ days), MEDIUM (30-89 days)  
-**Risk:** LOW
+**Required permission:** `Microsoft.Compute/snapshots/read`
 
 **Common causes:**
 - Snapshots from backup jobs
 - Over-retention without lifecycle policies
 - Snapshots from deleted disks
-
-**Required permission:** `Microsoft.Compute/snapshots/read`
 
 ---
 
@@ -230,21 +253,13 @@ CleanCloud implements 4 conservative, high-signal rules for Azure.
 
 **Rule ID:** `azure.untagged_resource`
 
-**Detects:** Resources with no tags at all.
+**Detects:** Resources with zero tags
 
-**Resources scanned:**
-- Managed disks
-- Managed disk snapshots (7+ days old only)
+**Resources:** Managed disks, snapshots (7+ days old)
 
-**Signals:**
-- Empty or missing tag collection
-- For disks: MEDIUM confidence if also unattached, otherwise LOW
-- For snapshots: LOW confidence (requires 7+ day age filter)
-
-**Why this matters:** Untagged resources are difficult to attribute to owners or cost centers, making them high-risk for becoming orphaned.
-
-**Confidence:** LOW to MEDIUM  
-**Risk:** LOW
+**Confidence:**
+- MEDIUM: Untagged disk that's also unattached
+- LOW: Untagged snapshot or attached disk
 
 **Required permissions:**
 - `Microsoft.Compute/disks/read`
@@ -256,374 +271,132 @@ CleanCloud implements 4 conservative, high-signal rules for Azure.
 
 **Rule ID:** `azure.public_ip_unused`
 
-**Detects:** Public IP addresses not attached to any network interface.
+**Detects:** Public IPs not attached to any network interface
 
-**Signal:** `publicIP.ip_configuration == null`
+**Confidence:**
+- HIGH: Not attached (deterministic state)
 
-**Why safe:** Attachment state is deterministic. No age thresholds or heuristics needed.
-
-**Confidence:** HIGH  
-**Risk:** LOW
-
-**Common causes:**
-- IPs from deleted VMs or load balancers
-- Reserved IPs no longer in use
-- Failed deployments
-
-**Azure cost note:** Unused public IPs incur charges even when unattached.
+**Detection logic:**
+```python
+if public_ip.ip_configuration is None:
+    confidence = "HIGH"
+```
 
 **Required permission:** `Microsoft.Network/publicIPAddresses/read`
 
----
-
-## Multi-Subscription Scanning
-
-### All Subscriptions (Default)
-
-```bash
-cleancloud scan --provider azure
-```
-
-CleanCloud discovers all subscriptions accessible to the service principal and scans them sequentially.
-
-### Single Subscription
-
-```bash
-export AZURE_SUBSCRIPTION_ID="12345678-1234-1234-1234-123456789abc"
-cleancloud scan --provider azure
-```
-
-When `AZURE_SUBSCRIPTION_ID` is set, only that subscription is scanned.
-
-### Region Filtering
-
-```bash
-# Scan only resources in East US region
-cleancloud scan --provider azure --region eastus
-
-# Scan only resources in West Europe
-cleancloud scan --provider azure --region westeurope
-```
-
-Azure uses "location" terminology internally but CleanCloud accepts `--region` for consistency with AWS.
-
----
-
-## Output Formats
-
-### Human-Readable (Default)
-
-```bash
-cleancloud scan --provider azure
-
-# Example output:
-🔍 Found 2 hygiene issues:
-
-1. [AZURE] Unattached Azure managed disk
-   Resource : azure.managed_disk → /subscriptions/.../disk-old-123
-   Region   : eastus
-   Confidence: HIGH
-   Reason   : Disk has no VM attachment and exceeds age threshold
-   Details:
-     - age_days: 47
-     - size_gb: 100
-```
-
-### JSON
-
-```bash
-cleancloud scan --provider azure --output json --output-file results.json
-```
-
-**Schema:**
-```json
-{
-  "summary": {
-    "total_findings": 8,
-    "by_provider": {"azure": 8},
-    "by_confidence": {"HIGH": 5, "MEDIUM": 2, "LOW": 1},
-    "scanned_at": "2025-01-15T10:30:00Z"
-  },
-  "findings": [
-    {
-      "provider": "azure",
-      "rule_id": "azure.unattached_managed_disk",
-      "resource_type": "azure.managed_disk",
-      "resource_id": "/subscriptions/abc.../disk-123",
-      "region": "eastus",
-      "confidence": "HIGH",
-      "risk": "LOW",
-      "detected_at": "2025-01-15T10:30:00Z",
-      "details": {
-        "resource_name": "disk-old-123",
-        "subscription_id": "abc123...",
-        "age_days": 47,
-        "size_gb": 100
-      }
-    }
-  ]
-}
-```
-
-### CSV
-
-```bash
-cleancloud scan --provider azure --output csv --output-file results.csv
-```
-
-**Columns:** provider, rule_id, resource_type, resource_id, region, title, confidence, risk, detected_at
-
----
-
-## CI/CD Integration
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Scan completed successfully, no policy violations |
-| 1 | Configuration error or unexpected failure |
-| 2 | Policy violation detected (findings present with enforcement flag) |
-| 3 | Missing Azure credentials or insufficient permissions |
-
-### Policy Enforcement
-
-**Informational mode (default):**
-```bash
-cleancloud scan --provider azure
-# Exit code 0 even if findings exist
-```
-
-**Fail on HIGH confidence findings (recommended):**
-```bash
-cleancloud scan --provider azure --fail-on-confidence HIGH
-# Exit code 2 if any HIGH confidence findings exist
-```
-
-**Fail on any findings (strict):**
-```bash
-cleancloud scan --provider azure --fail-on-findings
-# Exit code 2 if any findings exist (not recommended - too noisy)
-```
-
-### GitHub Actions Example
-
-```yaml
-name: CleanCloud Azure Scan
-
-on:
-  pull_request:
-  schedule:
-    - cron: '0 0 * * 1'  # Weekly on Monday
-
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run CleanCloud scan
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        run: |
-          pip install cleancloud
-          cleancloud scan --provider azure \
-            --output json --output-file results.json \
-            --fail-on-confidence HIGH
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cleancloud-results
-          path: results.json
-```
-
-### Azure DevOps Example
-
-```yaml
-trigger:
-  - main
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-steps:
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.11'
-
-- script: |
-    pip install cleancloud
-    cleancloud scan --provider azure --output json --output-file results.json --fail-on-confidence HIGH
-  displayName: 'Run CleanCloud Scan'
-  env:
-    AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-    AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-    AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
-
-- task: PublishBuildArtifacts@1
-  condition: always()
-  inputs:
-    pathToPublish: 'results.json'
-    artifactName: 'cleancloud-results'
-```
+**Note:** Unused public IPs incur charges even when unattached.
 
 ---
 
 ## Troubleshooting
 
-### "Missing Azure environment variables for authentication"
+### "Missing Azure environment variables"
 
-**Cause:** Required environment variables not set.
+**For OIDC (GitHub Actions):**
+```yaml
+# Ensure these secrets are set
+secrets:
+  AZURE_CLIENT_ID
+  AZURE_TENANT_ID
+  AZURE_SUBSCRIPTION_ID
+```
 
-**Solution:**
+**For local CLI:**
 ```bash
-# Verify variables are set
-echo $AZURE_CLIENT_ID
-echo $AZURE_TENANT_ID
-echo $AZURE_CLIENT_SECRET
-
-# If not, export them
-export AZURE_CLIENT_ID="..."
-export AZURE_TENANT_ID="..."
-export AZURE_CLIENT_SECRET="..."
+# Verify you're logged in
+az account show
 ```
 
 ### "Azure authentication failed"
 
-**Cause:** Invalid service principal credentials.
-
-**Solution:**
-1. Verify credentials are correct:
+**For OIDC:**
+1. Verify federated credential subject matches your repo:
    ```bash
-   az login --service-principal \
-     -u $AZURE_CLIENT_ID \
-     -p $AZURE_CLIENT_SECRET \
-     --tenant $AZURE_TENANT_ID
+   az ad app federated-credential list --id <APP_ID>
    ```
-2. If login fails, recreate service principal
-3. Update environment variables with new credentials
+2. Ensure `subject` is: `repo:YOUR_ORG/YOUR_REPO:ref:refs/heads/main`
 
-### "No accessible Azure subscriptions found"
-
-**Cause:** Service principal lacks Reader role on any subscription.
-
-**Solution:**
+**For CLI:**
 ```bash
-# List current role assignments
-az role assignment list --assignee $AZURE_CLIENT_ID
-
-# Assign Reader role if missing
-az role assignment create \
-  --assignee $AZURE_CLIENT_ID \
-  --role "Reader" \
-  --scope /subscriptions/{subscription-id}
+# Re-login
+az login
+az account set --subscription YOUR_SUBSCRIPTION_ID
 ```
 
-### "Missing required Azure permission: Microsoft.Compute/disks/read"
+### "No accessible subscriptions"
 
-**Cause:** Service principal has insufficient RBAC permissions.
+```bash
+# Check role assignments
+az role assignment list --assignee <APP_ID>
 
-**Solution:**
-1. Run `cleancloud doctor --provider azure` to validate permissions
-2. Ensure Reader role is assigned (see RBAC Permissions section)
-3. Wait 5-10 minutes for RBAC propagation
-4. Retry scan
+# Assign Reader role
+az role assignment create \
+  --assignee <APP_ID> \
+  --role "Reader" \
+  --scope /subscriptions/YOUR_SUBSCRIPTION_ID
+```
 
-### "Rate limit exceeded"
+### "Missing permission: Microsoft.Compute/disks/read"
 
-**Cause:** Too many API requests in short time period.
+```bash
+# Verify Reader role is assigned
+az role assignment list \
+  --assignee <APP_ID> \
+  --scope /subscriptions/YOUR_SUBSCRIPTION_ID
 
-**Solution:**
-- CleanCloud automatically handles pagination
-- Azure rate limits are generous for read operations
-- If rate-limited, wait 5-10 minutes and retry
-- Consider adding `--region` filter to reduce scope
-
----
-
-## Design Philosophy
-
-CleanCloud for Azure follows these principles:
-
-1. **Age-based confidence** - Resources must exist for 7-14+ days before flagging
-2. **Multiple signals preferred** - Combine attachment state + age when possible
-3. **Explicit confidence levels** - Always state LOW/MEDIUM/HIGH confidence
-4. **Review-only recommendations** - Never justify automated deletion
-
-These principles make CleanCloud safe for:
-- Production Azure subscriptions
-- Regulated environments (HIPAA, SOC2, ISO 27001)
-- Security-reviewed CI/CD pipelines
-- Multi-tenant infrastructure
-
----
-
-## Supported Azure Services
-
-| Service | Resources | Status |
-|---------|-----------|--------|
-| Compute | Managed disks | ✅ Supported |
-| Compute | Managed disk snapshots | ✅ Supported |
-| Network | Public IP addresses | ✅ Supported |
-| Compute | VM images | 🔜 Planned |
-| Network | Network interfaces (NICs) | 🔜 Planned |
-| Network | Network security groups | 🔜 Planned |
-| Storage | Blob storage containers | 🔜 Planned |
+# Wait 5-10 minutes for RBAC propagation
+```
 
 ---
 
 ## Azure vs AWS Differences
 
-### Authentication
-- **AWS:** Uses IAM roles/users with access keys
-- **Azure:** Uses service principals with client secrets
+| Aspect | AWS | Azure |
+|--------|-----|-------|
+| **OIDC Setup** | IAM role trust policy | Federated identity credential |
+| **Permissions** | IAM policies | RBAC roles |
+| **Regions** | Must specify or auto-detect | All locations by default |
+| **Resource IDs** | Short (e.g., `vol-abc123`) | Full ARM paths |
+| **Authentication** | OIDC or access keys | OIDC or client secrets |
 
-### Regions
-- **AWS:** Must specify region(s) to scan
-- **Azure:** Resources discovered across all locations by default
+---
 
-### Permissions Model
-- **AWS:** IAM policies with fine-grained actions
-- **Azure:** RBAC roles (Reader role typically sufficient)
+## Performance
 
-### Resource Naming
-- **AWS:** Short resource IDs (e.g., `vol-abc123`)
-- **Azure:** Full ARM resource IDs (e.g., `/subscriptions/.../disks/...`)
+| Subscriptions | Resources | Scan Time |
+|---------------|-----------|-----------|
+| 1 subscription | ~500 resources | 30-60 sec |
+| 1 subscription | ~2,000 resources | 2-3 min |
+| 3 subscriptions | ~6,000 resources | 5-8 min |
+
+**API calls:** All free (read-only operations have no cost)
+
+---
+
+## Security Best Practices
+
+✅ Use OIDC for CI/CD (no stored secrets)  
+✅ Use Reader role (least privilege)  
+✅ Restrict federated credential to specific repo/branch  
+✅ Monitor Azure Activity Log for CleanCloud actions  
+✅ Use separate service principals per environment
+
+❌ Don't use client secrets in CI/CD  
+❌ Don't grant Contributor role  
+❌ Don't share credentials across teams
+
+---
+
+## Supported Azure Clouds
+
+- ✅ Azure Commercial
+- ⚠️ Azure Government (not tested)
+- ⚠️ Azure China (not tested)
 
 ---
 
 ## Next Steps
 
-- Review detected findings: [Rule documentation](rules.md)
-- Integrate with CI/CD: [CI/CD guide](ci.md)
-- Configure AWS scanning: [AWS setup](aws.md)
-
----
-
-## FAQ
-
-**Q: Will CleanCloud delete my Azure resources?**  
-A: No. CleanCloud is read-only and never modifies, deletes, or tags resources.
-
-**Q: Does CleanCloud access Azure cost data?**  
-A: No. CleanCloud does not require or access Azure Cost Management APIs.
-
-**Q: Can I scan multiple subscriptions at once?**  
-A: Yes. By default, CleanCloud scans all subscriptions accessible to the service principal. Use `AZURE_SUBSCRIPTION_ID` to limit to one.
-
-**Q: Why do I need a service principal? Can't I use my Azure CLI login?**  
-A: CleanCloud requires non-interactive authentication for CI/CD compatibility. Azure CLI authentication is not supported.
-
-**Q: Can I customize age thresholds for disks/snapshots?**  
-A: Not yet. Conservative defaults (7-14 days for disks, 30-90 days for snapshots) are hardcoded at MVP stage. Configuration support is planned.
-
-**Q: Why so few rules compared to AWS?**  
-A: CleanCloud prioritizes high-signal, low-risk rules over breadth. Azure support was added in MVP; more rules will follow the same safety bar.
-
-**Q: Does CleanCloud support Azure Government Cloud?**  
-A: Not tested. Standard commercial Azure only at MVP stage.
-
-**Q: What about Azure DevOps integration?**  
-A: Yes! See the CI/CD Integration section for Azure Pipelines example.
+- **CI/CD Integration:** [ci.md](ci.md)
+- **Rule Details:** [rules.md](rules.md)
+- **AWS Setup:** [aws.md](aws.md)

@@ -257,22 +257,95 @@ See [`docs/aws.md`](docs/aws.md) for:
 * IAM role trust policies
 * Permission troubleshooting
 
-### Azure
+## Azure
 
-CleanCloud requires Azure service principal credentials:
+CleanCloud supports **Azure Workload Identity Federation (OIDC)** as the
+**default and recommended authentication method**.
 
-```bash
-export AZURE_CLIENT_ID=...
-export AZURE_TENANT_ID=...
-export AZURE_CLIENT_SECRET=...
-export AZURE_SUBSCRIPTION_ID=...  # Optional
+This enables **secretless authentication** using GitHub Actions, with short-lived,
+auditable credentials and no stored client secrets.
+
+---
+
+### GitHub Actions with Azure OIDC (Recommended)
+
+CleanCloud integrates with **Microsoft Entra ID Workload Identity Federation**
+to authenticate securely in CI/CD pipelines.
+
+**Benefits:**
+
+- No `AZURE_CLIENT_SECRET`
+- No long-lived credentials
+- Short-lived, auditable tokens
+- Enterprise-approved security model
+- Consistent with AWS OIDC usage
+
+---
+
+#### GitHub Actions Example (Azure OIDC)
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  cleancloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run CleanCloud hygiene scan
+        run: |
+          pip install cleancloud
+          cleancloud scan \
+            --provider azure \
+            --output json \
+            --output-file scan.json \
+            --fail-on-confidence HIGH
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleancloud-results
+          path: scan.json
+```
+
+
+**Local Development (Azure CLI)**
+
+For local runs, CleanCloud uses the active Azure CLI session:
+
+```
+az login
+az account set --subscription <SUBSCRIPTION_ID>
 
 cleancloud scan --provider azure
 ```
 
-**Required Azure permissions:** Reader role on subscription.
+**Azure Permissions**
 
-See [`docs/azure.md`](docs/azure.md) for detailed setup and RBAC configuration.
+CleanCloud requires **read-only access only**.
+
+**Minimum role required:**
+
+* Reader role at subscription scope
+
+No write, delete, or tag permissions are required.
+
+See [`docs/azure.md`](docs/azure.md) for:
+* App registration setup
+* Federated identity credential configuration
+* Multiple environment support
+* Permission troubleshooting
+
 
 ---
 
