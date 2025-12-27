@@ -128,7 +128,7 @@ jobs:
     name: Integration Test - AWS
     runs-on: ubuntu-latest
     continue-on-error: true
-    environment: cleancloud-it-test
+    environment: cleancloud-test
 
     steps:
       - uses: actions/checkout@v4
@@ -173,7 +173,7 @@ jobs:
     name: Integration Test - Azure
     runs-on: ubuntu-latest
     continue-on-error: true
-    environment: cleancloud-it-test
+    environment: cleancloud-test
 
     steps:
       - uses: actions/checkout@v4

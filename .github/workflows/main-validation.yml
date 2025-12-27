@@ -49,7 +49,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     environment: cleancloud-test
-    # NO continue-on-error - failures will block
 
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +92,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     environment: cleancloud-test
-    # NO continue-on-error - failures will block
 
     steps:
       - uses: actions/checkout@v4
