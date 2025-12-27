@@ -108,22 +108,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,aws,azure]"
 
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}      # App registration ID
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}      # Azure AD tenant
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: false
+          allow-no-subscription: false
+
       - name: Test Azure doctor (strict)
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          #AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           set -e  # Exit on any error
           cleancloud doctor --provider azure
 
       - name: Test Azure scan (strict)
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          #AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           set -e  # Exit on any error
           cleancloud scan --provider azure --output json --output-file test-results.json

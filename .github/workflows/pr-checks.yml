@@ -68,12 +68,16 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/CleanCloudCIReadOnly
           aws-region: us-east-1
 
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}      # App registration ID
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}      # Azure AD tenant
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: false
+          allow-no-subscription: false
+
       - name: Run tests
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           pytest tests/ -v --cov=cleancloud --cov-report=xml
 
@@ -118,10 +122,10 @@ jobs:
           path: dist/
 
   # =========================
-  # INTEGRATION TESTS (OPTIONAL - Don't block PR)
+  # INTEGRATION TESTS
   # =========================
   integration-test-aws:
-    name: Integration Test - AWS (Optional)
+    name: Integration Test - AWS
     runs-on: ubuntu-latest
     continue-on-error: true
     environment: cleancloud-it-test
@@ -166,7 +170,7 @@ jobs:
           path: test-results.json
 
   integration-test-azure:
-    name: Integration Test - Azure (Optional)
+    name: Integration Test - Azure
     runs-on: ubuntu-latest
     continue-on-error: true
     environment: cleancloud-it-test
@@ -184,21 +188,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,aws,azure]"
 
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}      # App registration ID
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}      # Azure AD tenant
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: false
+          allow-no-subscription: false
+
       - name: Test Azure doctor command
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           cleancloud doctor --provider azure
 
       - name: Test Azure scan
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           cleancloud scan \
             --provider azure \
