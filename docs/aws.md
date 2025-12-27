@@ -1,162 +1,174 @@
-# AWS Setup Guide
+# AWS Setup & Rules
 
-Complete configuration guide for running CleanCloud against AWS accounts.
+AWS-specific authentication, IAM policies, region handling, and detailed rule specifications.
 
----
-
-## Overview
-
-CleanCloud scans AWS accounts to identify orphaned, untagged, and potentially inactive resources using **read-only APIs only**. No resources are ever modified, deleted, or tagged.
-
-**What CleanCloud detects:**
-- Unattached EBS volumes
-- Old EBS snapshots (90+ days)
-- CloudWatch log groups with infinite retention
-- Untagged resources (volumes, buckets, log groups)
-
-**What CleanCloud does NOT do:**
-- ❌ Delete or modify resources
-- ❌ Make cost optimization recommendations
-- ❌ Enforce policies automatically
-- ❌ Require billing/cost data access
+> **For general usage:** See [README.md](../README.md)  
+> **For CI/CD integration:** See [ci.md](ci.md)
 
 ---
 
-## Quick Start
+## Authentication
 
-### 1. Validate Credentials
+### 1. OIDC with IAM Roles (Recommended for CI/CD)
 
-```bash
-cleancloud doctor --provider aws --region us-east-1
+No credentials stored, temporary tokens only, SOC2 compliant.
+
+**Trust Policy:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "Federated": "arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+    },
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/YOUR_REPO:ref:refs/heads/main"
+      }
+    }
+  }]
+}
 ```
 
-This validates:
-- AWS credentials are configured
-- Required IAM permissions exist
-- API connectivity works
+Replace `YOUR_ACCOUNT_ID`, `YOUR_ORG`, and `YOUR_REPO` with your values.
 
-### 2. Run a Scan
+**Example:**
+```json
+"token.actions.githubusercontent.com:sub": "repo:acme-corp/infrastructure:ref:refs/heads/main"
+```
+
+This restricts the role to only be assumable from your team's specific repository.
+
+**GitHub Actions:**
+```yaml
+- uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::YOUR_ACCOUNT_ID:role/CleanCloudScanner
+    aws-region: us-east-1
+
+- name: Run CleanCloud
+  run: |
+    pip install cleancloud
+    cleancloud scan --provider aws
+```
+
+### 2. AWS CLI Profiles (Local Development)
 
 ```bash
-# Single region
-cleancloud scan --provider aws --region us-east-1
+aws configure --profile cleancloud
+cleancloud scan --provider aws --profile cleancloud
+```
 
-# All enabled regions
-cleancloud scan --provider aws --all-regions
+### 3. Environment Variables
 
-# Export to JSON
-cleancloud scan --provider aws --all-regions --output json --output-file results.json
+```bash
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+cleancloud scan --provider aws
 ```
 
 ---
 
-## IAM Permissions
-
-CleanCloud requires **read-only permissions** only.
-
-### Recommended IAM Policy
-
-Create an IAM policy named `CleanCloudReadOnly`:
+## IAM Policy
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "CleanCloudReadOnly",
+      "Sid": "EC2ReadOnly",
       "Effect": "Allow",
       "Action": [
         "ec2:DescribeVolumes",
         "ec2:DescribeSnapshots",
+        "ec2:DescribeInstances",
         "ec2:DescribeRegions",
+        "ec2:DescribeTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogsReadOnly",
+      "Effect": "Allow",
+      "Action": [
         "logs:DescribeLogGroups",
+        "logs:ListTagsLogGroup"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3ReadOnly",
+      "Effect": "Allow",
+      "Action": [
         "s3:ListAllMyBuckets",
         "s3:GetBucketTagging",
-        "sts:GetCallerIdentity"
+        "s3:GetBucketLocation"
       ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "STSIdentity",
+      "Effect": "Allow",
+      "Action": "sts:GetCallerIdentity",
       "Resource": "*"
     }
   ]
 }
 ```
 
-### What This Policy Does NOT Allow
-
-- ❌ Delete operations (`Delete*`)
-- ❌ Modification operations (`Modify*`, `Update*`)
-- ❌ Tagging operations (`Tag*`, `Untag*`)
-- ❌ Attachment operations (`Attach*`, `Detach*`)
-- ❌ Billing data access (`ce:*`, `cur:*`)
-
-### Attach Policy To
-
-**Option A: IAM Role (Recommended for Production)**
-```bash
-aws iam attach-role-policy \
-  --role-name CleanCloudRole \
-  --policy-arn arn:aws:iam::ACCOUNT_ID:policy/CleanCloudReadOnly
-```
-
-**Option B: IAM User (Acceptable for Testing)**
-```bash
-aws iam attach-user-policy \
-  --user-name cleancloud \
-  --policy-arn arn:aws:iam::ACCOUNT_ID:policy/CleanCloudReadOnly
-```
+**Does NOT allow:** Delete*, Modify*, Tag*, Attach*, billing access.
 
 ---
 
-## Authentication
+## Region Behavior
 
-CleanCloud uses the standard AWS SDK credential resolution chain.
+CleanCloud automatically detects which regions to scan.
 
-### Using AWS Profiles
-
+**Auto-detect (default):**
 ```bash
-# Configure profile
-aws configure --profile cleancloud
-
-# Use profile with CleanCloud
-cleancloud scan --provider aws --profile cleancloud --region us-east-1
-```
-
-### Using Environment Variables
-
-```bash
-export AWS_ACCESS_KEY_ID=x
-export AWS_SECRET_ACCESS_KEY=x
-export AWS_DEFAULT_REGION=x
-
 cleancloud scan --provider aws
+# Scans only regions with resources (3-5 typically)
 ```
 
-### Using IAM Roles (EC2/ECS/Lambda)
+**All regions:**
+```bash
+cleancloud scan --provider aws --all-regions
+# Scans all enabled regions (25+)
+```
 
-If running on EC2, ECS, or Lambda, CleanCloud automatically uses the instance/task IAM role. No additional configuration needed.
+**Specific regions:**
+```bash
+cleancloud scan --provider aws --regions us-east-1,us-west-2
+```
+
+### Service-Specific Behavior
+
+**Regional services** (query each region):
+- EC2, EBS, RDS, Lambda, DynamoDB, CloudWatch Logs
+
+**Global services** (query once from us-east-1):
+- S3 buckets (list is global, each bucket has a region)
+- IAM (truly global)
+
+CleanCloud handles this automatically - no duplicate findings, 60% faster scans.
 
 ---
 
-## Rules
-
-CleanCloud implements 4 conservative, high-signal rules for AWS.
+## Rules (4 Total)
 
 ### 1. Unattached EBS Volumes
 
 **Rule ID:** `aws.ebs.volume.unattached`
 
-**Detects:** EBS volumes not attached to any EC2 instance.
+**Detects:** Volumes not attached to any instance
 
-**Signal:** `volume.state != "in-use"`
-
-**Why safe:** Volume attachment state is deterministic. No heuristics or age thresholds needed.
-
-**Confidence:** HIGH  
-**Risk:** LOW
-
-**Common causes:**
-- Volumes from terminated instances
-- Volumes created by autoscaling groups
-- Failed deployments
+**Confidence:**
+- HIGH: Unattached ≥ 14 days
+- MEDIUM: Unattached 7-13 days
+- Not flagged: < 7 days
 
 **Required permission:** `ec2:DescribeVolumes`
 
@@ -166,21 +178,12 @@ CleanCloud implements 4 conservative, high-signal rules for AWS.
 
 **Rule ID:** `aws.ebs.snapshot.old`
 
-**Detects:** EBS snapshots older than 90 days (configurable).
+**Detects:** Snapshots ≥ 365 days old
 
-**Signals:**
-- Snapshot age ≥ 90 days
-- Owned by current account (`OwnerIds=["self"]`)
+**Confidence:**
+- HIGH: Age ≥ 365 days
 
-**Conservative approach:** Does NOT attempt to detect AMI linkage at MVP stage to avoid false positives.
-
-**Confidence:** HIGH  
-**Risk:** LOW
-
-**Common causes:**
-- Snapshots from CI/CD backup jobs
-- Snapshots from deleted volumes
-- Over-retention without lifecycle policies
+**Limitations:** Does NOT check AMI linkage (by design, to avoid false positives)
 
 **Required permission:** `ec2:DescribeSnapshots`
 
@@ -190,19 +193,10 @@ CleanCloud implements 4 conservative, high-signal rules for AWS.
 
 **Rule ID:** `aws.cloudwatch.logs.infinite_retention`
 
-**Detects:** CloudWatch log groups with no retention policy configured (logs never expire).
+**Detects:** Log groups with no retention policy
 
-**Signal:** `retentionInDays == null`
-
-**Why conservative:** Only flags infinite retention, does NOT infer ingestion activity (to avoid false positives).
-
-**Confidence:** HIGH  
-**Risk:** LOW
-
-**Common causes:**
-- Log groups created by Lambda/ECS without retention policies
-- Log groups from deleted services
-- Default CloudWatch behavior (no expiration)
+**Confidence:**
+- HIGH: No retention policy, ≥ 30 days old
 
 **Required permission:** `logs:DescribeLogGroups`
 
@@ -212,264 +206,65 @@ CleanCloud implements 4 conservative, high-signal rules for AWS.
 
 **Rule ID:** `aws.resource.untagged`
 
-**Detects:** Resources with no tags at all.
+**Detects:** Resources with zero tags
 
-**Resources scanned:**
-- EBS volumes
-- S3 buckets
-- CloudWatch log groups
+**Resources:** EBS volumes, S3 buckets, CloudWatch log groups
 
-**Signal:** Empty or missing tag set
+**Confidence:**
+- MEDIUM: Zero tags (always MEDIUM)
 
-**Why this matters:** Untagged resources are difficult to attribute to owners, making them high-risk for becoming orphaned.
-
-**Confidence:** MEDIUM  
-**Risk:** LOW
-
-**Required permissions:**
-- `ec2:DescribeVolumes`
-- `s3:ListAllMyBuckets`
-- `s3:GetBucketTagging`
-- `logs:DescribeLogGroups`
-
----
-
-## Multi-Region Scanning
-
-### Single Region
-
-```bash
-cleancloud scan --provider aws --region us-west-2
-```
-
-### All Regions
-
-```bash
-cleancloud scan --provider aws --all-regions
-```
-
-When `--all-regions` is specified:
-1. CleanCloud calls `ec2:DescribeRegions` to discover enabled regions
-2. Scans each region sequentially (to avoid API throttling)
-3. Aggregates findings across all regions
-
-**Note:** S3 is scanned once globally (not per-region) to avoid duplicate findings.
-
----
-
-## Output Formats
-
-### Human-Readable (Default)
-
-```bash
-cleancloud scan --provider aws
-
-# Example output:
-🔍 Found 3 hygiene issues:
-
-1. [AWS] Unattached EBS volume
-   Resource : ebs_volume → vol-0abc123def456789
-   Region   : us-east-1
-   Confidence: HIGH
-   Reason   : Volume state is not 'in-use'
-```
-
-### JSON
-
-```bash
-cleancloud scan --provider aws --output json --output-file results.json
-```
-
-**Schema:**
-```json
-{
-  "summary": {
-    "total_findings": 12,
-    "by_provider": {"aws": 12},
-    "by_confidence": {"HIGH": 8, "MEDIUM": 4},
-    "scanned_at": "2025-01-15T10:30:00Z"
-  },
-  "findings": [
-    {
-      "provider": "aws",
-      "rule_id": "aws.ebs.volume.unattached",
-      "resource_type": "ebs_volume",
-      "resource_id": "vol-0abc123def456789",
-      "region": "us-east-1",
-      "confidence": "HIGH",
-      "risk": "LOW",
-      "detected_at": "2025-01-15T10:30:00Z",
-      "details": {...}
-    }
-  ]
-}
-```
-
-### CSV
-
-```bash
-cleancloud scan --provider aws --output csv --output-file results.csv
-```
-
-**Columns:** provider, rule_id, resource_type, resource_id, region, title, confidence, risk, detected_at
-
----
-
-## CI/CD Integration
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Scan completed successfully, no policy violations |
-| 1 | Configuration error or unexpected failure |
-| 2 | Policy violation detected (findings present with enforcement flag) |
-| 3 | Missing AWS credentials or insufficient permissions |
-
-### Policy Enforcement
-
-**Informational mode (default):**
-```bash
-cleancloud scan --provider aws
-# Exit code 0 even if findings exist
-```
-
-**Fail on HIGH confidence findings (recommended):**
-```bash
-cleancloud scan --provider aws --fail-on-confidence HIGH
-# Exit code 2 if any HIGH confidence findings exist
-```
-
-**Fail on any findings (strict):**
-```bash
-cleancloud scan --provider aws --fail-on-findings
-# Exit code 2 if any findings exist (not recommended - too noisy)
-```
-
-### GitHub Actions Example
-
-```yaml
-name: CleanCloud AWS Scan
-
-on:
-  pull_request:
-  schedule:
-    - cron: '0 0 * * 1'  # Weekly on Monday
-
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::123456789012:role/CleanCloudRole
-          aws-region: us-east-1
-
-      - name: Run CleanCloud scan
-        run: |
-          pip install cleancloud
-          cleancloud scan --provider aws --all-regions \
-            --output json --output-file results.json \
-            --fail-on-confidence HIGH
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cleancloud-results
-          path: results.json
-```
+**Required permissions:** `ec2:DescribeVolumes`, `s3:GetBucketTagging`, `logs:ListTagsLogGroup`
 
 ---
 
 ## Troubleshooting
 
-### "No AWS credentials found"
-
-**Cause:** AWS credentials not configured.
-
-**Solution:**
+**Credentials not found:**
 ```bash
-# Check if credentials are configured
-aws sts get-caller-identity
-
-# If not, configure them
-aws configure
+aws sts get-caller-identity  # Verify credentials work
 ```
 
-### "Access Denied" / "UnauthorizedOperation"
+**Access denied:**
+```bash
+cleancloud doctor --provider aws  # Check permissions
+```
 
-**Cause:** Missing IAM permissions.
+**Missing findings:**
+- Check you're scanning the right regions
+- Resources may be excluded by age thresholds (volumes < 7 days, snapshots < 365 days)
 
-**Solution:**
-1. Run `cleancloud doctor --provider aws` to identify missing permissions
-2. Attach the CleanCloudReadOnly policy (see IAM Permissions section)
-3. Verify with `aws iam get-user-policy` or `aws iam get-role-policy`
-
-### "Rate limit exceeded"
-
-**Cause:** Scanning too many regions/resources too quickly.
-
-**Solution:**
-- CleanCloud automatically paginates API calls
-- Scans regions sequentially to avoid throttling
-- If still rate-limited, wait 5-10 minutes and retry
+**Rate limiting:**
+- CleanCloud auto-handles with exponential backoff
+- If persistent: scan fewer regions, wait 5-10 minutes
 
 ---
 
-## Design Philosophy
+## Performance
 
-CleanCloud for AWS follows these principles:
+| Regions | Scan Time |
+|---------|-----------|
+| 1 region | 15-30 sec |
+| 3 regions (auto-detect) | 2-3 min |
+| All regions (25+) | 8-10 min |
 
-1. **Conservative over aggressive** - Prefer false negatives to false positives
-2. **Multiple signals required** - Never flag based on a single weak indicator
-3. **Explicit confidence levels** - Always state LOW/MEDIUM/HIGH confidence
-4. **Review-only recommendations** - Never justify automated deletion
-
-These principles make CleanCloud safe for:
-- Production AWS accounts
-- Regulated environments (HIPAA, SOC2, PCI-DSS)
-- Security-reviewed CI/CD pipelines
-- Multi-tenant infrastructure
+**API calls:** All free (read-only operations have no cost)
 
 ---
 
-## Supported AWS Services
+## Security
 
-| Service | Resources | Status |
-|---------|-----------|--------|
-| EC2 | EBS volumes, snapshots | ✅ Supported |
-| CloudWatch | Log groups | ✅ Supported |
-| S3 | Buckets (tagging only) | ✅ Supported |
-| EC2 | Elastic IPs | 🔜 Planned |
-| EC2 | AMIs | 🔜 Planned |
-| EC2 | Security groups | 🔜 Planned |
-| RDS | Snapshots | 🔜 Planned |
+✅ Use OIDC for CI/CD (no stored credentials)  
+✅ Use least-privilege IAM policy (CleanCloudReadOnly)  
+✅ Enable CloudTrail logging  
+✅ Restrict OIDC trust to specific repos
+
+❌ Don't use long-lived access keys in CI/CD  
+❌ Don't use overly broad policies (e.g., ReadOnlyAccess)
 
 ---
 
-## Next Steps
+## Supported Regions
 
-- Review detected findings: [Rule documentation](rules.md)
-- Integrate with CI/CD: [CI/CD guide](ci.md)
-- Configure Azure scanning: [Azure setup](azure.md)
+All AWS commercial regions. Auto-detects opt-in status.
 
----
-
-## FAQ
-
-**Q: Will CleanCloud delete my resources?**  
-A: No. CleanCloud is read-only and never modifies, deletes, or tags resources.
-
-**Q: Does CleanCloud access billing data?**  
-A: No. CleanCloud does not require or access AWS billing/cost APIs.
-
-**Q: Can I customize age thresholds?**  
-A: Not yet. Conservative defaults (90 days for snapshots, 7-14 days for disks) are hardcoded at MVP stage. Configuration support is planned.
-
-**Q: Why so few rules?**  
-A: CleanCloud prioritizes high-signal, low-risk rules over breadth. Each rule must meet a strict safety bar before being added.
-
-**Q: Does CleanCloud support GovCloud/China regions?**  
-A: Not tested. Standard commercial regions only at MVP stage.
+**Not tested:** GovCloud, China regions.
