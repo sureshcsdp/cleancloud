@@ -98,22 +98,52 @@ See [`docs/rules.md`](docs/rules.md) for detailed rule behavior and confidence t
 
 CleanCloud is designed for CI/CD pipelines with predictable exit codes and policy enforcement.
 
-### GitHub Actions Example
+#### Recommended: GitHub Actions with AWS OIDC (No Secrets)
+
+CleanCloud supports AWS IAM Roles assumed via GitHub Actions OpenID Connect (OIDC).
+This is the recommended approach for CI/CD usage.
+
+**Benefits:**
+
+* No long-lived AWS credentials
+* No secrets stored in GitHub
+* Short-lived, auditable credentials
+* Read-only by design
+
+**GitHub Actions Example (AWS)**
 
 ```yaml
-- name: Run CleanCloud hygiene scan
-  env:
-    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  run: |
-    pip install cleancloud
-    cleancloud scan --provider aws --output json --output-file scan.json --fail-on-confidence HIGH
+permissions:
+  id-token: write
+  contents: read
 
-- name: Upload results
-  uses: actions/upload-artifact@v4
-  with:
-    name: cleancloud-results
-    path: scan.json
+jobs:
+  cleancloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/CleanCloudCIReadOnly
+          aws-region: us-east-1
+
+      - name: Run CleanCloud hygiene scan
+        run: |
+          pip install cleancloud
+          cleancloud scan \
+            --provider aws \
+            --output json \
+            --output-file scan.json \
+            --fail-on-confidence HIGH
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleancloud-results
+          path: scan.json
+
 ```
 
 ### Exit Codes
@@ -146,23 +176,69 @@ See [`docs/ci.md`](docs/ci.md) for complete CI/CD integration examples.
 
 ### AWS
 
-CleanCloud uses standard AWS credential resolution:
+CleanCloud supports three AWS authentication methods:
+
+1. GitHub Actions OIDC (recommended for CI/CD)
+2. AWS CLI profiles (local development)
+3. Environment variables
+
+**Local Development (AWS Profile)**
 
 ```bash
 # Using AWS profile
 aws configure --profile cleancloud
 cleancloud scan --provider aws --profile cleancloud
+```
 
-# Using environment variables
+**Environment Variables**
+```
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_DEFAULT_REGION=us-east-1
+
 cleancloud scan --provider aws
 ```
 
-**Required IAM permissions:** Read-only access to EC2, CloudWatch Logs, and S3.
 
-See [`docs/aws.md`](docs/aws.md) for detailed setup and IAM policy.
+**AWS IAM Policy (Minimum Read-Only Permissions)**
+
+Attach the following identity-based policy to the IAM role or user used by CleanCloud
+(including GitHub Actions OIDC roles):
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeVolumes",
+        "ec2:DescribeSnapshots",
+        "ec2:DescribeRegions",
+        "ec2:DescribeTags",
+        "logs:DescribeLogGroups",
+        "logs:ListTagsForResource",
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation",
+        "s3:GetBucketTagging"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+**Characteristics:**
+
+* No Delete*, Create*, or Tag* permissions
+* Safe for production accounts
+* Compatible with security-reviewed pipelines
+
+See [`docs/aws.md`](docs/aws.md) for:
+
+* OIDC provider setup
+* IAM role trust policies
+* Permission troubleshooting
 
 ### Azure
 
