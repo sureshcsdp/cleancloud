@@ -15,6 +15,7 @@ from cleancloud.config.schema import (
     IgnoreTagRuleConfig,
     load_config,
 )
+from cleancloud.doctor import run_doctor
 from cleancloud.exit_policy import (
     EXIT_ERROR,
     EXIT_OK,
@@ -31,7 +32,6 @@ from cleancloud.output.csv import write_csv
 from cleancloud.output.human import print_human
 from cleancloud.output.json import write_json
 from cleancloud.output.summary import build_summary
-from cleancloud.providers.aws.doctor import run_aws_doctor
 
 # ------------------------
 # AWS rules
@@ -49,7 +49,6 @@ from cleancloud.providers.aws.rules.untagged_resources import (
 # Sessions / doctor
 # ------------------------
 from cleancloud.providers.aws.session import create_aws_session
-from cleancloud.providers.azure.doctor import run_azure_doctor
 
 # ------------------------
 # Azure rules
@@ -81,7 +80,7 @@ def cli():
 # Scan Command
 # ========================
 @cli.command()
-@click.option("--provider", default="aws", type=click.Choice(["aws", "azure"]))
+@click.option("--provider", type=click.Choice(["aws", "azure"]))
 @click.option("--region", default=None, help="Cloud region (Azure location or AWS region)")
 @click.option("--all-regions", is_flag=True, help="Scan all AWS regions")
 @click.option("--profile", default=None, help="AWS CLI profile")
@@ -289,7 +288,12 @@ def scan(
 # Doctor Command
 # ========================
 @cli.command()
-@click.option("--provider", default="aws", type=click.Choice(["aws", "azure"]))
+@click.option(
+    "--provider",
+    default=None,  # Changed from "aws" to None
+    type=click.Choice(["aws", "azure"]),
+    help="Cloud provider to validate (omit to check both)"
+)
 @click.option("--region", default="us-east-1")
 @click.option("--profile", default=None)
 @click.option(
@@ -300,6 +304,8 @@ def scan(
 def doctor(provider: str, region: Optional[str], profile: Optional[str], config: Optional[str]):
     click.echo("🩺 Running CleanCloud doctor")
 
+    run_doctor(provider,profile, region)
+
     try:
         cfg = CleanCloudConfig.empty()
         if config:
@@ -309,18 +315,6 @@ def doctor(provider: str, region: Optional[str], profile: Optional[str], config:
 
         if cfg.tag_filtering and cfg.tag_filtering.enabled:
             click.echo("⚠️  Tag filtering is enabled — some findings may be intentionally ignored")
-
-        if provider == "aws":
-            run_aws_doctor(profile=profile, region=region)
-            sys.exit(EXIT_OK)
-
-        elif provider == "azure":
-            run_azure_doctor()
-            sys.exit(EXIT_OK)
-
-        else:
-            click.echo(f"Unknown provider: {provider}")
-            sys.exit(EXIT_ERROR)
 
     except Exception as e:
         click.echo(f"❌ Doctor failed: {e}")
