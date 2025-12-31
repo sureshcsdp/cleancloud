@@ -60,7 +60,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/cleancloud-io/cleancloud"
-Documentation = "https://github.com/cleancloud-io/cleancloud#readme
+Documentation = "https://github.com/cleancloud-io/cleancloud#readme"
 Repository = "https://github.com/cleancloud-io/cleancloud"
 Issues = "https://github.com/cleancloud-io/cleancloud/issues"
 
