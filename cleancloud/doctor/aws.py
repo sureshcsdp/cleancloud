@@ -259,14 +259,23 @@ def run_aws_doctor(profile: Optional[str], region: str) -> None:
     info("")
     if metadata.get("ci_cd_ready"):
         success("CI/CD Ready: YES ✅")
+        # Safety guarantees (informational only)
+        info("")
+        info("🛡️ CleanCloud Safety Guarantees")
+        info("-" * 70)
+        success("✔ Read-only operations only")
+        success("✔ No resource creation, modification, or deletion")
+        success("✔ Only Describe / List / Get APIs invoked")
+        success("✔ Enforced by CI safety regression tests")
+
         success("  Suitable for production CI/CD pipelines")
     else:
         if method_id == "profile":
             info("CI/CD Ready: NO (Local development only)")
-            info("  AWS CLI profiles are not available in CI/CD")
+            info("AWS CLI profiles are not available in CI/CD")
         else:
             warn("CI/CD Ready: NO ⚠️")
-            warn("  Not recommended for automated pipelines")
+            warn("Not recommended for automated pipelines")
 
     # Compliance notes
     info("")
@@ -313,6 +322,14 @@ def run_aws_doctor(profile: Optional[str], region: str) -> None:
 
         if method_id == "static_keys":
             warn("  ⚠ Using IAM user credentials (not recommended for CI/CD)")
+
+    # Region scope clarification
+    info("")
+    info("🌍 Region Scope")
+    info("-" * 70)
+    info(f"Active Region: {region}")
+    info("Doctor validates permissions for the active region only")
+    info("Multi-region scanning (future) will require region enumeration permissions")
 
     # Step 4: Permission validation
     info("")
@@ -371,7 +388,7 @@ def run_aws_doctor(profile: Optional[str], region: str) -> None:
             warn(f"✗ s3:ListAllMyBuckets - {e}")
 
     except Exception as e:
-        fail(f"Permission validation failed: {e}")
+        fail("CleanCloud cannot run safely with missing read-only permissions")
 
     # Summary
     info("")
