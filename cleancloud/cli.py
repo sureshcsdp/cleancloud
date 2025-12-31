@@ -203,7 +203,6 @@ def scan(
             if region:
                 # Explicit region specified
                 regions_to_scan = [region]
-                click.echo(f"🎯 Scanning region: {region}")
                 region_selection_mode = "explicit"
 
             else:
