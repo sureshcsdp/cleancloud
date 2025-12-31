@@ -387,7 +387,7 @@ def run_aws_doctor(profile: Optional[str], region: str) -> None:
             permissions_failed.append(("s3:ListAllMyBuckets", str(e)))
             warn(f"✗ s3:ListAllMyBuckets - {e}")
 
-    except Exception as e:
+    except Exception:
         fail("CleanCloud cannot run safely with missing read-only permissions")
 
     # Summary
