@@ -245,15 +245,8 @@ def scan(
             click.echo(f"✓ Found {len(subscription_ids)} subscription(s)")
             click.echo()
 
-            for sub_id in subscription_ids:
-                click.echo(f"📦 Subscription {sub_id}")
-                findings.extend(
-                    _scan_azure_subscription(
-                        subscription_id=sub_id,
-                        credential=session.credential,
-                        region_filter=region,
-                    )
-                )
+            findings = scan_azure_subscriptions(subscription_ids, session.credential, region)
+            click.echo()
 
             regions_scanned = ["all"] if not region else [region]
             region_selection_mode = "explicit" if region else "all"
@@ -374,6 +367,43 @@ def scan_aws_regions(
             findings.extend(future.result())
 
     return findings
+
+def scan_azure_subscriptions(
+        subscription_ids: List[str],
+        credential,
+        region_filter: Optional[str],
+) -> List[Finding]:
+    all_findings: List[Finding] = []
+
+    with click.progressbar(
+            length=len(subscription_ids),
+            label="Scanning Azure subscriptions",
+            show_eta=True,
+            show_percent=True,
+    ) as bar:
+        with ThreadPoolExecutor(max_workers=min(4, len(subscription_ids))) as executor:
+            futures = {
+                executor.submit(
+                    _scan_azure_subscription,
+                    subscription_id=sub_id,
+                    credential=credential,
+                    region_filter=region_filter,
+                ): sub_id
+                for sub_id in subscription_ids
+            }
+
+            for future in as_completed(futures):
+                sub_id = futures[future]
+                click.echo(f"✅ Completed subscription {sub_id}")
+                click.echo()
+                try:
+                    all_findings.extend(future.result())
+                except Exception as e:
+                    click.echo(f"⚠️ Subscription {sub_id} failed: {e}")
+                finally:
+                    bar.update(1)
+
+    return all_findings
 
 
 def _get_active_aws_regions(session) -> List[str]:
@@ -630,28 +660,42 @@ AZURE_RULES: List[Callable] = [
 
 
 def _scan_azure_subscription(
-    subscription_id: str,
-    credential,
-    region_filter: Optional[str],
+        subscription_id: str,
+        credential,
+        region_filter: Optional[str],
 ) -> List[Finding]:
     findings: List[Finding] = []
 
-    with ThreadPoolExecutor(max_workers=len(AZURE_RULES)) as executor:
-        futures = [
-            executor.submit(
-                rule,
-                subscription_id=subscription_id,
-                credential=credential,
-                region_filter=region_filter,
-            )
-            for rule in AZURE_RULES
-        ]
+    with click.progressbar(
+            length=len(AZURE_RULES),
+            label=f"Scanning Azure rules in subscription {subscription_id}",
+            show_eta=True,
+            show_percent=True,
+    ) as bar:
+        with ThreadPoolExecutor(max_workers=min(4, len(AZURE_RULES))) as executor:
+            futures = [
+                executor.submit(
+                    rule,
+                    subscription_id=subscription_id,
+                    credential=credential,
+                    region_filter=region_filter,
+                )
+                for rule in AZURE_RULES
+            ]
 
-        for future in as_completed(futures):
-            findings.extend(future.result())
+            for future in as_completed(futures):
+                try:
+                    rule_findings = future.result()
+                    findings.extend(rule_findings)
+                except Exception as e:
+                    # Trust-first: never fail whole scan
+                    click.echo(
+                        f"⚠️ Azure rule failed in subscription {subscription_id}: {e}"
+                    )
+                finally:
+                    bar.update(1)
 
     return findings
-
 
 def main():
     cli()
