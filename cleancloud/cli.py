@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import botocore.exceptions
 import click
@@ -10,6 +10,9 @@ import yaml
 # ------------------------
 # Config + filtering
 # ------------------------
+from cleancloud.config.defaults import DEFAULT_CONFIG
+from cleancloud.config.loader import load_config as load_config_from_files
+from cleancloud.config.loader import get_rule_config
 from cleancloud.config.schema import (
     CleanCloudConfig,
     IgnoreTagRuleConfig,
@@ -69,6 +72,69 @@ CONFIDENCE_ORDER = {
 }
 
 
+def parse_rule_config_overrides(ctx, param, values):
+    """
+    Parse --rule-config flags into nested dict.
+
+    Example:
+        --rule-config aws.old_ebs_snapshots.days_old=180
+
+    Becomes:
+        {
+            "rules": {
+                "aws": {
+                    "old_ebs_snapshots": {
+                        "days_old": 180
+                    }
+                }
+            }
+        }
+    """
+    if not values:
+        return {}
+
+    result = {"rules": {}}
+
+    for value in values:
+        if '=' not in value:
+            raise click.BadParameter(f"Invalid format: {value}. Expected key=value")
+
+        key_path, value_str = value.split('=', 1)
+        keys = key_path.split('.')
+
+        # Validate minimum key path length
+        if len(keys) < 2:
+            raise click.BadParameter(
+                f"Invalid key path: {key_path}. "
+                f"Expected format: provider.rule_name.setting (e.g., aws.old_ebs_snapshots.days_old)"
+            )
+
+        # Build nested dict
+        current = result["rules"]
+        for key in keys[:-1]:
+            current.setdefault(key, {})
+            current = current[key]
+
+        # Try to parse value as int, float, bool, or string
+        final_key = keys[-1]
+        try:
+            # Try int
+            current[final_key] = int(value_str)
+        except ValueError:
+            try:
+                # Try float
+                current[final_key] = float(value_str)
+            except ValueError:
+                # Try bool
+                if value_str.lower() in ('true', 'false'):
+                    current[final_key] = value_str.lower() == 'true'
+                else:
+                    # String
+                    current[final_key] = value_str
+
+    return result
+
+
 @click.group()
 def cli():
     """CleanCloud – Safe cloud hygiene scanner"""
@@ -112,24 +178,37 @@ def cli():
 @click.option(
     "--config",
     type=click.Path(exists=True),
-    help="Path to cleancloud.yaml",
+    help="Path to cleancloud.yaml config file",
+)
+@click.option(
+    "--rule-config",
+    multiple=True,
+    callback=parse_rule_config_overrides,
+    help="Override rule config (e.g., aws.old_ebs_snapshots.days_old=180)",
 )
 @click.option(
     "--ignore-tag",
     multiple=True,
     help="Ignore findings by tag (key or key:value). Overrides config.",
 )
+@click.option(
+    "--verbose",
+    is_flag=True,
+    help="Show configuration details and rule thresholds",
+)
 def scan(
-    provider: str,
-    region: Optional[str],
-    all_regions: bool,
-    profile: Optional[str],
-    output: str,
-    output_file: Optional[str],
-    fail_on_findings: bool,
-    fail_on_confidence: Optional[str],
-    config: Optional[str],
-    ignore_tag: List[str],
+        provider: str,
+        region: Optional[str],
+        all_regions: bool,
+        profile: Optional[str],
+        output: str,
+        output_file: Optional[str],
+        fail_on_findings: bool,
+        fail_on_confidence: Optional[str],
+        config: Optional[str],
+        rule_config: Dict[str, Any],
+        ignore_tag: List[str],
+        verbose: bool,
 ):
     """
     Scan cloud infrastructure for orphaned and untagged resources.
@@ -149,6 +228,13 @@ def scan(
 
         # Azure - filter by location
         cleancloud scan --provider azure --region eastus
+
+        # Override rule thresholds
+        cleancloud scan --provider aws --region us-east-1 \\
+          --rule-config aws.old_ebs_snapshots.days_old=90
+
+        # Use custom config file
+        cleancloud scan --provider aws --config prod.yaml
     """
     click.echo("🔍 Starting CleanCloud scan")
     click.echo(f"Provider: {provider}")
@@ -182,14 +268,38 @@ def scan(
         # Note: Azure doesn't require region validation
         # Azure scans all subscriptions by default, region is optional filter
 
-        # ------------------------
-        # Load config (safe)
-        # ------------------------
-        cfg = CleanCloudConfig.empty()
-        if config:
-            with open(config) as f:
-                raw = yaml.safe_load(f) or {}
-                cfg = load_config(raw)
+        # ========================
+        # Load configuration (NEW)
+        # ========================
+
+        # Load config from files (YAML) and merge with CLI overrides
+        merged_config_dict = load_config_from_files(
+            config_file=config,
+            cli_overrides=rule_config,
+        )
+
+        # Parse into CleanCloudConfig object (for tag filtering)
+        cfg = load_config(merged_config_dict)
+
+        # Show configuration if verbose
+        if verbose:
+            click.echo("📋 Configuration loaded from:")
+            if config:
+                click.echo(f"   ✓ Config file: {config}")
+            else:
+                # Check which default files exist
+                cwd_config = Path.cwd() / "cleancloud.yaml"
+                home_config = Path.home() / ".cleancloud" / "config.yaml"
+                if cwd_config.exists():
+                    click.echo(f"   ✓ ./cleancloud.yaml")
+                if home_config.exists():
+                    click.echo(f"   ✓ ~/.cleancloud/config.yaml")
+
+            if rule_config:
+                click.echo(f"   ✓ CLI overrides: {len(rule_config.get('rules', {}).get(provider, {}))} rule(s)")
+
+            click.echo(f"   ✓ Built-in defaults")
+            click.echo()
 
         findings: List[Finding] = []
 
@@ -226,7 +336,14 @@ def scan(
             # Scan each region
             for r in regions_to_scan:
                 click.echo(f"🔍 Scanning region {r}")
-                findings.extend(_scan_aws_region(profile=profile, region=r))
+                findings.extend(
+                    _scan_aws_region(
+                        profile=profile,
+                        region=r,
+                        config_dict=merged_config_dict,
+                        verbose=verbose,
+                    )
+                )
 
             regions_scanned = regions_to_scan
 
@@ -252,6 +369,8 @@ def scan(
                         subscription_id=sub_id,
                         credential=session.credential,
                         region_filter=region,
+                        config_dict=merged_config_dict,
+                        verbose=verbose,
                     )
                 )
 
@@ -457,15 +576,15 @@ def _region_has_cleancloud_resources(session, region: str) -> tuple[bool, Option
 
         # Check if it's a permission/auth error
         if any(
-            keyword in error_msg.lower()
-            for keyword in [
-                "unauthorized",
-                "access denied",
-                "forbidden",
-                "credentials",
-                "authentication",
-                "not authorized",
-            ]
+                keyword in error_msg.lower()
+                for keyword in [
+                    "unauthorized",
+                    "access denied",
+                    "forbidden",
+                    "credentials",
+                    "authentication",
+                    "not authorized",
+                ]
         ):
             return False, f"Permission error: {error_msg}"
 
@@ -537,11 +656,12 @@ def doctor(provider: Optional[str], region: str, profile: Optional[str], config:
     run_doctor(provider=provider, profile=profile, region=region)
 
     try:
-        cfg = CleanCloudConfig.empty()
+        # Load config to check tag filtering status
         if config:
-            with open(config) as f:
-                raw = yaml.safe_load(f) or {}
-                cfg = load_config(raw)
+            merged_config_dict = load_config_from_files(config_file=config)
+            cfg = load_config(merged_config_dict)
+        else:
+            cfg = CleanCloudConfig.empty()
 
         if cfg.tag_filtering and cfg.tag_filtering.enabled:
             click.echo()
@@ -555,39 +675,179 @@ def doctor(provider: Optional[str], region: str, profile: Optional[str], config:
 
 
 # ========================
-# Helpers (UNCHANGED)
+# Config Commands (NEW)
 # ========================
-def _get_all_aws_regions(session) -> List[str]:
-    ec2 = session.client("ec2", region_name="us-east-1")
-    response = ec2.describe_regions(AllRegions=False)
-    return [r["RegionName"] for r in response["Regions"]]
+@cli.group()
+def config_cmd():
+    """Configuration management commands."""
+    pass
 
 
-def _scan_aws_region(profile: Optional[str], region: str) -> List[Finding]:
+@config_cmd.command('validate')
+@click.option('--config', type=click.Path(exists=True), help='Config file to validate')
+def validate_config(config: Optional[str]):
+    """
+    Validate configuration file.
+
+    Examples:
+        cleancloud config validate
+        cleancloud config validate --config prod.yaml
+    """
+    try:
+        merged_config_dict = load_config_from_files(config_file=config)
+        cfg = load_config(merged_config_dict)
+
+        click.echo("✅ Configuration is valid!")
+
+        # Show summary
+        if cfg.rules:
+            aws_rules = len(cfg.rules.aws) if cfg.rules.aws else 0
+            azure_rules = len(cfg.rules.azure) if cfg.rules.azure else 0
+
+            click.echo()
+            click.echo("Configuration summary:")
+            if aws_rules:
+                click.echo(f"  AWS rules: {aws_rules} configured")
+            if azure_rules:
+                click.echo(f"  Azure rules: {azure_rules} configured")
+
+        if cfg.tag_filtering and cfg.tag_filtering.enabled:
+            click.echo(f"  Tag filtering: enabled ({len(cfg.tag_filtering.ignore)} rules)")
+
+    except Exception as e:
+        click.echo(f"❌ Configuration error: {e}", err=True)
+        sys.exit(EXIT_ERROR)
+
+
+@config_cmd.command('show')
+@click.option('--config', type=click.Path(exists=True), help='Config file to show')
+@click.option(
+    '--rule-config',
+    multiple=True,
+    callback=parse_rule_config_overrides,
+    help='CLI overrides to apply'
+)
+@click.option('--provider', type=click.Choice(['aws', 'azure']), help='Show only this provider')
+def show_config(config: Optional[str], rule_config: Dict[str, Any], provider: Optional[str]):
+    """
+    Show merged configuration.
+
+    Examples:
+        cleancloud config show
+        cleancloud config show --config prod.yaml
+        cleancloud config show --provider aws
+    """
+    import json
+
+    merged_config_dict = load_config_from_files(
+        config_file=config,
+        cli_overrides=rule_config,
+    )
+
+    if provider:
+        # Show only provider-specific config
+        provider_config = merged_config_dict.get("rules", {}).get(provider, {})
+        click.echo(f"Configuration for {provider}:")
+        click.echo(json.dumps(provider_config, indent=2))
+    else:
+        # Show full config
+        click.echo("Merged configuration:")
+        click.echo(json.dumps(merged_config_dict, indent=2))
+
+
+# Add config command group to CLI
+cli.add_command(config_cmd, name='config')
+
+
+# ========================
+# AWS Scan Helper (UPDATED with config)
+# ========================
+def _scan_aws_region(
+        profile: Optional[str],
+        region: str,
+        config_dict: Dict[str, Any],
+        verbose: bool = False,
+) -> List[Finding]:
+    """
+    Scan single AWS region with configured thresholds.
+
+    Args:
+        profile: AWS profile name
+        region: AWS region to scan
+        config_dict: Merged configuration dictionary
+        verbose: Show rule configuration details
+    """
     session = create_aws_session(profile=profile, region=region)
     findings: List[Finding] = []
 
-    findings.extend(find_unattached_ebs_volumes(session, region))
-    findings.extend(find_old_ebs_snapshots(session, region))
-    findings.extend(find_inactive_cloudwatch_logs(session, region))
-    findings.extend(find_aws_untagged_resources(session, region))
+    # Extract rule-specific configs
+    unattached_volumes_config = get_rule_config(config_dict, "aws", "unattached_volumes")
+    old_snapshots_config = get_rule_config(config_dict, "aws", "old_ebs_snapshots")
+    inactive_logs_config = get_rule_config(config_dict, "aws", "infinite_log_retention")
+    untagged_config = get_rule_config(config_dict, "aws", "untagged_resources")
 
+    if verbose:
+        click.echo(f"   Rule configs:")
+        if unattached_volumes_config:
+            click.echo(f"     • unattached_volumes: {unattached_volumes_config}")
+        if old_snapshots_config:
+            click.echo(f"     • old_ebs_snapshots: {old_snapshots_config}")
+
+    # Run rules with config
+    findings.extend(find_unattached_ebs_volumes(session, region, rule_config=unattached_volumes_config))
+    findings.extend(find_old_ebs_snapshots(session, region, rule_config=old_snapshots_config))
+    findings.extend(find_inactive_cloudwatch_logs(session, region, rule_config=inactive_logs_config))
+    findings.extend(find_aws_untagged_resources(session, region, rule_config=untagged_config))
+
+    # Set region on all findings
     for f in findings:
         f.region = region
 
     return findings
 
 
+# ========================
+# Azure Scan Helper (UPDATED with config)
+# ========================
 def _scan_azure_subscription(
-    subscription_id: str, credential, region_filter: Optional[str]
+        subscription_id: str,
+        credential,
+        region_filter: Optional[str],
+        config_dict: Dict[str, Any],
+        verbose: bool = False,
 ) -> List[Finding]:
+    """
+    Scan Azure subscription with configured thresholds.
+
+    Args:
+        subscription_id: Azure subscription ID
+        credential: Azure credential
+        region_filter: Optional location filter
+        config_dict: Merged configuration dictionary
+        verbose: Show rule configuration details
+    """
     findings: List[Finding] = []
 
+    # Extract rule-specific configs
+    unattached_disks_config = get_rule_config(config_dict, "azure", "unattached_disks")
+    old_snapshots_config = get_rule_config(config_dict, "azure", "old_snapshots")
+    untagged_config = get_rule_config(config_dict, "azure", "untagged_resources")
+    unused_ips_config = get_rule_config(config_dict, "azure", "unused_public_ips")
+
+    if verbose:
+        click.echo(f"   Rule configs:")
+        if unattached_disks_config:
+            click.echo(f"     • unattached_disks: {unattached_disks_config}")
+        if old_snapshots_config:
+            click.echo(f"     • old_snapshots: {old_snapshots_config}")
+
+    # Run rules with config
     findings.extend(
         find_unattached_managed_disks(
             subscription_id=subscription_id,
             credential=credential,
             region_filter=region_filter,
+            rule_config=unattached_disks_config,
         )
     )
     findings.extend(
@@ -595,6 +855,7 @@ def _scan_azure_subscription(
             subscription_id=subscription_id,
             credential=credential,
             region_filter=region_filter,
+            rule_config=old_snapshots_config,
         )
     )
     findings.extend(
@@ -602,6 +863,7 @@ def _scan_azure_subscription(
             subscription_id=subscription_id,
             credential=credential,
             region_filter=region_filter,
+            rule_config=untagged_config,
         )
     )
     findings.extend(
@@ -609,6 +871,7 @@ def _scan_azure_subscription(
             subscription_id=subscription_id,
             credential=credential,
             region_filter=region_filter,
+            rule_config=unused_ips_config,
         )
     )
 

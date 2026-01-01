@@ -9,3 +9,20 @@ tag_filtering:
     - key: team
       value: platform
     - key: team   # without value
+
+rules:
+  aws:
+    old_ebs_snapshots:
+      days_old: 90
+
+  azure:
+    unattached_disks:
+      confidence_days:
+        medium: 7
+        high: 14
+    managed_disk_snapshots:
+      confidence_days:
+        medium: 30
+        high: 90
+    untagged_resources:
+      min_age_days: 7
