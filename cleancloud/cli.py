@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Tuple
 
 import botocore.exceptions
 import click
@@ -226,12 +226,7 @@ def scan(
 
             click.echo()
 
-            # Scan each region
-            for r in regions_to_scan:
-                click.echo(f"🔍 Scanning region {r}")
-                click.echo()
-                findings.extend(_scan_aws_region(profile=profile, region=r))
-
+            findings = scan_aws_regions(profile, regions_to_scan)
             regions_scanned = regions_to_scan
 
         # ========================
@@ -358,26 +353,32 @@ def scan(
         traceback.print_exc()
         sys.exit(EXIT_ERROR)
 
+def scan_aws_regions(
+        profile: Optional[str],
+        regions_to_scan: List[str],
+) -> List[Finding]:
+    findings: List[Finding] = []
 
-# ========================
-# Helper: Get active AWS regions (comprehensive check)
-# ========================
+    with ThreadPoolExecutor(max_workers=min(5, len(regions_to_scan))) as executor:
+        futures = {
+            executor.submit(_scan_aws_region, profile, region): region
+            for region in regions_to_scan
+        }
+
+        for future in as_completed(futures):
+            region = futures[future]
+            click.echo(f"✅ Completed region {region}")
+            findings.extend(future.result())
+
+    return findings
+
+
 def _get_active_aws_regions(session) -> List[str]:
     """
     Auto-detect AWS regions that have resources CleanCloud scans.
-
-    Only called when user specifies --all-regions flag.
-
-    Checks multiple resource types:
-    - EBS volumes (unattached volumes rule)
-    - EBS snapshots (old snapshots rule)
-    - CloudWatch Logs (infinite retention rule)
-
-    Returns:
-        List of region names with resources
+    Parallelised for performance.
     """
     try:
-        # Get all enabled regions
         ec2 = session.client("ec2", region_name="us-east-1")
         response = ec2.describe_regions(
             AllRegions=False,
@@ -385,37 +386,47 @@ def _get_active_aws_regions(session) -> List[str]:
         )
 
         enabled_regions = [r["RegionName"] for r in response["Regions"]]
-        active_regions = []
-        errors = []
+        active_regions: List[str] = []
+        errors: List[Tuple[str, str]] = []
 
-        # Check each region for CleanCloud-scanned resources
-        for region in enabled_regions:
-            has_resources, error = _region_has_cleancloud_resources(session, region)
+        # Bound concurrency to avoid throttling
+        max_workers = min(8, len(enabled_regions))
 
-            if has_resources:
-                active_regions.append(region)
-            elif error:
-                # Track errors for reporting
-                errors.append((region, error))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    _region_has_cleancloud_resources, session, region
+                ): region
+                for region in enabled_regions
+            }
 
-        # Report any errors found
+            for future in as_completed(futures):
+                region = futures[future]
+                try:
+                    has_resources, error = future.result()
+                    if has_resources:
+                        active_regions.append(region)
+                    elif error:
+                        errors.append((region, error))
+                except Exception as e:
+                    errors.append((region, str(e)))
+
+        # Optional: user-facing error summary (unchanged behaviour)
         if errors:
             import click
 
             click.echo()
             click.echo(f"⚠️  Could not check {len(errors)} region(s):")
-            for region, error in errors[:5]:  # Show first 5
+            for region, error in errors[:5]:
                 click.echo(f"   • {region}: {error[:80]}")
             if len(errors) > 5:
                 click.echo(f"   ... and {len(errors) - 5} more")
             click.echo()
 
-        return active_regions
+        return sorted(active_regions)
 
     except Exception:
-        # If auto-detection fails, return empty list
         return []
-
 
 def _region_has_cleancloud_resources(session, region: str) -> tuple[bool, Optional[str]]:
     """
@@ -579,23 +590,29 @@ def _scan_aws_region(profile: Optional[str], region: str) -> List[Finding]:
     session = create_aws_session(profile=profile, region=region)
     findings: List[Finding] = []
 
-    with ThreadPoolExecutor(max_workers=len(AWS_RULES)) as executor:
-        future_to_rule = {
-            executor.submit(rule, session, region): rule.__name__
-            for rule in AWS_RULES
-        }
+    with click.progressbar(
+            length=len(AWS_RULES),
+            label=f"Scanning AWS rules in {region}",
+            show_eta=True,
+            show_percent=True,
+    ) as bar:
+        with ThreadPoolExecutor(max_workers=min(4, len(AWS_RULES))) as executor:
+            futures = [
+                executor.submit(rule, session, region)
+                for rule in AWS_RULES
+            ]
 
-        for future in as_completed(future_to_rule):
-            rule_name = future_to_rule[future]
-            try:
-                rule_findings = future.result()
-                findings.extend(rule_findings)
-            except Exception as e:
-                # Important: fail soft, not hard
-                raise RuntimeError(
-                    f"AWS rule {rule_name} failed in region {region}: {e}"
-                ) from e
+            for future in as_completed(futures):
+                try:
+                    rule_findings = future.result()
+                    findings.extend(rule_findings)
+                except Exception as e:
+                    # Trust-first: never fail whole scan
+                    click.echo(f"⚠️ Rule failed in {region}: {e}")
+                finally:
+                    bar.update(1)
 
+    # Ensure region is always set
     for f in findings:
         f.region = region
 
