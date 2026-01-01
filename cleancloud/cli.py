@@ -1,12 +1,12 @@
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Callable, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import botocore.exceptions
 import click
 import yaml
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ------------------------
 # Config + filtering
@@ -353,16 +353,16 @@ def scan(
         traceback.print_exc()
         sys.exit(EXIT_ERROR)
 
+
 def scan_aws_regions(
-        profile: Optional[str],
-        regions_to_scan: List[str],
+    profile: Optional[str],
+    regions_to_scan: List[str],
 ) -> List[Finding]:
     findings: List[Finding] = []
 
     with ThreadPoolExecutor(max_workers=min(5, len(regions_to_scan))) as executor:
         futures = {
-            executor.submit(_scan_aws_region, profile, region): region
-            for region in regions_to_scan
+            executor.submit(_scan_aws_region, profile, region): region for region in regions_to_scan
         }
 
         for future in as_completed(futures):
@@ -394,9 +394,7 @@ def _get_active_aws_regions(session) -> List[str]:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(
-                    _region_has_cleancloud_resources, session, region
-                ): region
+                executor.submit(_region_has_cleancloud_resources, session, region): region
                 for region in enabled_regions
             }
 
@@ -427,6 +425,7 @@ def _get_active_aws_regions(session) -> List[str]:
 
     except Exception:
         return []
+
 
 def _region_has_cleancloud_resources(session, region: str) -> tuple[bool, Optional[str]]:
     """
@@ -522,6 +521,7 @@ def _print_summary(summary: dict, region_selection_mode: str = None):
         click.echo("🎉 No hygiene issues detected")
         click.echo()
 
+
 # ========================
 # Doctor Command
 # ========================
@@ -579,6 +579,7 @@ def _get_all_aws_regions(session) -> List[str]:
     response = ec2.describe_regions(AllRegions=False)
     return [r["RegionName"] for r in response["Regions"]]
 
+
 AWS_RULES: List[Callable] = [
     find_unattached_ebs_volumes,
     find_old_ebs_snapshots,
@@ -586,21 +587,19 @@ AWS_RULES: List[Callable] = [
     find_aws_untagged_resources,
 ]
 
+
 def _scan_aws_region(profile: Optional[str], region: str) -> List[Finding]:
     session = create_aws_session(profile=profile, region=region)
     findings: List[Finding] = []
 
     with click.progressbar(
-            length=len(AWS_RULES),
-            label=f"Scanning AWS rules in {region}",
-            show_eta=True,
-            show_percent=True,
+        length=len(AWS_RULES),
+        label=f"Scanning AWS rules in {region}",
+        show_eta=True,
+        show_percent=True,
     ) as bar:
         with ThreadPoolExecutor(max_workers=min(4, len(AWS_RULES))) as executor:
-            futures = [
-                executor.submit(rule, session, region)
-                for rule in AWS_RULES
-            ]
+            futures = [executor.submit(rule, session, region) for rule in AWS_RULES]
 
             for future in as_completed(futures):
                 try:
@@ -618,6 +617,7 @@ def _scan_aws_region(profile: Optional[str], region: str) -> List[Finding]:
 
     return findings
 
+
 AZURE_RULES: List[Callable] = [
     find_unattached_managed_disks,
     find_old_snapshots,
@@ -625,10 +625,11 @@ AZURE_RULES: List[Callable] = [
     find_unused_public_ips,
 ]
 
+
 def _scan_azure_subscription(
-        subscription_id: str,
-        credential,
-        region_filter: Optional[str],
+    subscription_id: str,
+    credential,
+    region_filter: Optional[str],
 ) -> List[Finding]:
     findings: List[Finding] = []
 
@@ -647,6 +648,7 @@ def _scan_azure_subscription(
             findings.extend(future.result())
 
     return findings
+
 
 def main():
     cli()
