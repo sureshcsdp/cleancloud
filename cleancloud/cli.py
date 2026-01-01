@@ -368,18 +368,19 @@ def scan_aws_regions(
 
     return findings
 
+
 def scan_azure_subscriptions(
-        subscription_ids: List[str],
-        credential,
-        region_filter: Optional[str],
+    subscription_ids: List[str],
+    credential,
+    region_filter: Optional[str],
 ) -> List[Finding]:
     all_findings: List[Finding] = []
 
     with click.progressbar(
-            length=len(subscription_ids),
-            label="Scanning Azure subscriptions",
-            show_eta=True,
-            show_percent=True,
+        length=len(subscription_ids),
+        label="Scanning Azure subscriptions",
+        show_eta=True,
+        show_percent=True,
     ) as bar:
         with ThreadPoolExecutor(max_workers=min(4, len(subscription_ids))) as executor:
             futures = {
@@ -660,17 +661,17 @@ AZURE_RULES: List[Callable] = [
 
 
 def _scan_azure_subscription(
-        subscription_id: str,
-        credential,
-        region_filter: Optional[str],
+    subscription_id: str,
+    credential,
+    region_filter: Optional[str],
 ) -> List[Finding]:
     findings: List[Finding] = []
 
     with click.progressbar(
-            length=len(AZURE_RULES),
-            label=f"Scanning Azure rules in subscription {subscription_id}",
-            show_eta=True,
-            show_percent=True,
+        length=len(AZURE_RULES),
+        label=f"Scanning Azure rules in subscription {subscription_id}",
+        show_eta=True,
+        show_percent=True,
     ) as bar:
         with ThreadPoolExecutor(max_workers=min(4, len(AZURE_RULES))) as executor:
             futures = [
@@ -689,13 +690,12 @@ def _scan_azure_subscription(
                     findings.extend(rule_findings)
                 except Exception as e:
                     # Trust-first: never fail whole scan
-                    click.echo(
-                        f"⚠️ Azure rule failed in subscription {subscription_id}: {e}"
-                    )
+                    click.echo(f"⚠️ Azure rule failed in subscription {subscription_id}: {e}")
                 finally:
                     bar.update(1)
 
     return findings
+
 
 def main():
     cli()
