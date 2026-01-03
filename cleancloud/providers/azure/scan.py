@@ -4,6 +4,7 @@ from typing import Callable, List, Optional, Tuple
 import click
 
 from cleancloud.core.finding import Finding
+from cleancloud.output.progress import advance
 from cleancloud.providers.azure.rules.ebs_snapshots_old import find_old_snapshots
 from cleancloud.providers.azure.rules.public_ip_unused import find_unused_public_ips
 from cleancloud.providers.azure.rules.unattached_managed_disks import (
@@ -85,7 +86,7 @@ def scan_azure_subscriptions(
                 except Exception as e:
                     click.echo(f"⚠️ Subscription {sub_id} failed: {e}")
                 finally:
-                    bar.update(1)
+                    advance(bar)
 
     return all_findings
 
@@ -122,6 +123,6 @@ def _scan_azure_subscription(
                     # Trust-first: never fail whole scan
                     click.echo(f"⚠️ Azure rule failed in subscription {subscription_id}: {e}")
                 finally:
-                    bar.update(1)
+                    advance(bar)
 
     return findings
