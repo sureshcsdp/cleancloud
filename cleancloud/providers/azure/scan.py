@@ -14,21 +14,55 @@ from cleancloud.providers.azure.rules.untagged_resources import (
     find_untagged_resources as find_azure_untagged_resources,
 )
 from cleancloud.providers.azure.session import create_azure_session
+from cleancloud.providers.azure.validate import validate_subscription_params
 
 
 def scan_azure_with_region_selection(
     region: Optional[str],
+    subscriptions: Optional[List[str]] = None,
+    all_subscriptions: bool = False,
 ) -> Tuple[str, List[Finding], List[str]]:
+    # Validate subscription parameters
+    validate_subscription_params(subscriptions, all_subscriptions)
+
     click.echo("🔍 Authenticating to Azure")
     click.echo()
 
     session = create_azure_session()
-    subscription_ids = session.list_subscription_ids()
+    all_accessible_subscriptions = session.list_subscription_ids()
 
-    if not subscription_ids:
+    if not all_accessible_subscriptions:
         raise PermissionError("No accessible Azure subscriptions found")
 
-    click.echo(f"✓ Found {len(subscription_ids)} subscription(s)")
+    # Determine which subscriptions to scan
+    if subscriptions:
+        # Specific subscription(s) requested
+        subscription_ids = subscriptions
+        subscription_selection_mode = "explicit"
+
+        # Validate that requested subscriptions are accessible
+        inaccessible = set(subscription_ids) - set(all_accessible_subscriptions)
+        if inaccessible:
+            click.echo(f"⚠️  Warning: {len(inaccessible)} subscription(s) not accessible:")
+            for sub_id in sorted(inaccessible)[:5]:
+                click.echo(f"   • {sub_id}")
+            if len(inaccessible) > 5:
+                click.echo(f"   ... and {len(inaccessible) - 5} more")
+            click.echo()
+
+            # Only scan accessible ones
+            subscription_ids = [s for s in subscription_ids if s in all_accessible_subscriptions]
+
+            if not subscription_ids:
+                raise PermissionError("None of the specified subscriptions are accessible")
+
+        click.echo(f"✓ Scanning {len(subscription_ids)} specified subscription(s)")
+    else:
+        # Default: scan all accessible subscriptions
+        subscription_ids = all_accessible_subscriptions
+        subscription_selection_mode = "all"
+        click.echo(f"✓ Found {len(subscription_ids)} accessible subscription(s)")
+
     click.echo()
 
     findings = scan_azure_subscriptions(
@@ -39,10 +73,10 @@ def scan_azure_with_region_selection(
 
     click.echo()
 
-    regions_scanned = ["all"] if not region else [region]
-    region_selection_mode = "explicit" if region else "all"
+    # Return subscription info (not region info)
+    subscriptions_scanned = subscription_ids
 
-    return region_selection_mode, findings, regions_scanned
+    return subscription_selection_mode, findings, subscriptions_scanned
 
 
 AZURE_RULES: List[Callable] = [
@@ -79,8 +113,6 @@ def scan_azure_subscriptions(
 
             for future in as_completed(futures):
                 sub_id = futures[future]
-                click.echo(f"✅ Completed subscription {sub_id}")
-                click.echo()
                 try:
                     all_findings.extend(future.result())
                 except Exception as e:

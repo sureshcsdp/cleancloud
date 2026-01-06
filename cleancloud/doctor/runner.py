@@ -43,7 +43,7 @@ def run_doctor(
     for p in providers_to_check:
         try:
             if p == "aws":
-                run_aws_doctor(profile=profile, region=region or "us-east-1")
+                run_aws_doctor(profile=profile, region=region)
                 results[p] = {"status": "passed", "error": None}
 
             elif p == "azure":

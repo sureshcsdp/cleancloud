@@ -4,6 +4,7 @@ from typing import Callable, List, Optional, Tuple
 import click
 
 from cleancloud.core.finding import Finding
+from cleancloud.output.progress import advance
 from cleancloud.providers.aws.rules.cloudwatch_inactive import (
     find_inactive_cloudwatch_logs,
 )
@@ -168,16 +169,26 @@ def scan_aws_regions(
 ) -> List[Finding]:
     findings: List[Finding] = []
 
-    with ThreadPoolExecutor(max_workers=min(5, len(regions_to_scan))) as executor:
-        futures = {
-            executor.submit(_scan_aws_region, profile, region): region for region in regions_to_scan
-        }
+    with click.progressbar(
+        length=len(regions_to_scan),
+        label="Scanning AWS regions",
+        show_eta=True,
+        show_percent=True,
+    ) as bar:
+        with ThreadPoolExecutor(max_workers=min(5, len(regions_to_scan))) as executor:
+            futures = {
+                executor.submit(_scan_aws_region, profile, region): region
+                for region in regions_to_scan
+            }
 
-        for future in as_completed(futures):
-            region = futures[future]
-            click.echo(f"✅ Completed region {region}")
-            click.echo()
-            findings.extend(future.result())
+            for future in as_completed(futures):
+                region = futures[future]
+                try:
+                    findings.extend(future.result())
+                except Exception as e:
+                    click.echo(f"⚠️  Region {region} failed: {e}")
+                finally:
+                    advance(bar)
 
     return findings
 
@@ -203,7 +214,7 @@ def _scan_aws_region(profile: Optional[str], region: str) -> List[Finding]:
                     # Trust-first: never fail whole scan
                     click.echo(f"⚠️ Rule failed in {region}: {e}")
                 finally:
-                    bar.update(1)
+                    advance(bar)
 
     # Ensure region is always set
     for f in findings:
