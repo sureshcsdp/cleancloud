@@ -48,6 +48,16 @@ from cleancloud.providers.azure.scan import scan_azure_with_region_selection
     is_flag=True,
     help="Scan all regions with resources (auto-detects active regions)",
 )
+@click.option(
+    "--subscription",
+    multiple=True,
+    help="Azure subscription ID to scan (can specify multiple times)",
+)
+@click.option(
+    "--all-subscriptions",
+    is_flag=True,
+    help="Scan all accessible Azure subscriptions (default behavior)",
+)
 @click.option("--profile", default=None, help="AWS CLI profile name")
 @click.option(
     "--output",
@@ -90,6 +100,8 @@ def scan(
     provider: str,
     region: Optional[str],
     all_regions: bool,
+    subscription: tuple,
+    all_subscriptions: bool,
     profile: Optional[str],
     output: str,
     output_file: Optional[str],
@@ -115,8 +127,12 @@ def scan(
             )
 
         elif provider == "azure":
+            # Convert tuple to list for Azure
+            subscription_list = list(subscription) if subscription else None
             region_selection_mode, findings, regions_scanned = scan_azure_with_region_selection(
                 region=region,
+                subscriptions=subscription_list,
+                all_subscriptions=all_subscriptions,
             )
 
         ignored_count = 0

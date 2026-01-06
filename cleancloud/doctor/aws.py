@@ -155,7 +155,9 @@ def detect_aws_auth_method(session) -> tuple[str, str, dict]:
         return "error", f"Error detecting method: {e}", {"error": str(e)}
 
 
-def run_aws_doctor(profile: Optional[str], region: str) -> None:
+def run_aws_doctor(profile: Optional[str], region: Optional[str] = None) -> None:
+    if region is None:
+        region = "us-east-1"
     info("")
     info("=" * 70)
     info("AWS ENVIRONMENT VALIDATION")

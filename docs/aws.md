@@ -162,8 +162,34 @@ Attach this policy to your IAM role or user:
 # AWS requires explicit region choice
 cleancloud scan --provider aws --region us-east-1
 
+# Or scan all regions with resources
+cleancloud scan --provider aws --all-regions
+
 # ERROR: Must specify --region or --all-regions
 ```
+
+**Why?** AWS has 30+ regions, and scanning all by default would be slow and expensive.
+
+### Region Validation
+
+CleanCloud validates region names immediately. If you specify an invalid region, the scan fails fast:
+
+```bash
+cleancloud scan --provider aws --region invalid-xyz
+# ❌ Error: 'invalid-xyz' is not a valid AWS region
+#
+# Common AWS regions:
+#   us-east-1, us-east-2, us-west-1, us-west-2
+#   eu-west-1, eu-central-1, ap-southeast-1, ap-northeast-1
+#
+# All known regions:
+#   [Lists all 30+ valid regions]
+```
+
+**Benefits:**
+- Fast fail (~1ms) instead of waiting for timeouts
+- Clear error messages with suggestions
+- Prevents accidental typos (e.g., `us-esat-1` instead of `us-east-1`)
 
 ### Scan Specific Region
 

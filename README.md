@@ -109,7 +109,6 @@ pip install cleancloud
 ```bash
 # AWS
 cleancloud doctor --provider aws --region us-east-1
-cleancloud scan --provider aws --all-regions
 
 # Azure
 cleancloud doctor --provider azure
@@ -124,8 +123,14 @@ cleancloud scan --provider aws --region us-east-1
 # AWS - all regions
 cleancloud scan --provider aws --all-regions
 
-# Azure - all subscriptions
+# Azure - all subscriptions (default)
 cleancloud scan --provider azure
+
+# Azure - specific subscription
+cleancloud scan --provider azure --subscription <subscription-id>
+
+# Azure - multiple subscriptions
+cleancloud scan --provider azure --subscription <sub-id-1> --subscription <sub-id-2>
 ```
 
 ### View Results
@@ -385,11 +390,19 @@ jobs:
 
 For local runs, CleanCloud uses the active Azure CLI session:
 
-```
+```bash
 az login
-az account set --subscription <SUBSCRIPTION_ID>
 
+# Scan all accessible subscriptions (default)
 cleancloud scan --provider azure
+
+# Scan specific subscription
+cleancloud scan --provider azure --subscription <subscription-id>
+
+# Scan multiple subscriptions
+cleancloud scan --provider azure \
+  --subscription <sub-id-1> \
+  --subscription <sub-id-2>
 ```
 
 **Azure Permissions**
@@ -408,6 +421,29 @@ See [`docs/azure.md`](docs/azure.md) for:
 * Multiple environment support
 * Permission troubleshooting
 
+**Azure Subscription Selection**
+
+By default, CleanCloud scans all accessible subscriptions. You can filter to specific subscriptions:
+
+```bash
+# Default: scan all accessible subscriptions
+cleancloud scan --provider azure
+
+# Scan specific subscription
+cleancloud scan --provider azure --subscription <sub-id>
+
+# Scan multiple subscriptions
+cleancloud scan --provider azure \
+  --subscription <sub-id-1> \
+  --subscription <sub-id-2>
+```
+
+**When to use subscription filtering:**
+- **Enterprise scale**: Organizations with 50+ subscriptions
+- **Team ownership**: Scan only subscriptions your team owns
+- **CI/CD pipelines**: Different pipelines for different subscriptions
+- **Testing**: Test on dev subscriptions before running on production
+- **Performance**: Faster scans when targeting specific subscriptions
 
 ---
 

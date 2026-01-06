@@ -14,7 +14,7 @@ from cleancloud.doctor.runner import run_doctor
     type=click.Choice(["aws", "azure"]),
     help="Cloud provider to validate (omit to check both)",
 )
-@click.option("--region", default="us-east-1", help="AWS region for validation")
+@click.option("--region", default=None, help="AWS region for validation (default: us-east-1)")
 @click.option("--profile", default=None, help="AWS profile name")
 @click.option(
     "--config",
