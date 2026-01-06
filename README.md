@@ -144,6 +144,13 @@ cleancloud scan --provider aws --region us-east-1 --output json --output-file re
 
 # CSV output
 cleancloud scan --provider aws --region us-east-1 --output csv --output-file results.csv
+
+# Azure JSON output
+cleancloud scan --provider azure --subscription <subscription-id> --output json --output-file results.json
+
+# Azure CSV output
+cleancloud scan --provider azure --subscription <subscription-id> --output csv --output-file results.csv
+
 ```
 
 ---
@@ -160,6 +167,36 @@ Each rule:
 
 **See [`docs/rules.md`](docs/rules.md) for full details.**
 
+---
+
+### Policy Enforcement
+
+```bash
+# AWS
+
+# Fail only on HIGH confidence findings (recommended)
+cleancloud scan --provider aws --region us-east-1 --fail-on-confidence HIGH
+
+# Fail on MEDIUM or higher confidence
+cleancloud scan --provider aws --region us-east-1  --fail-on-confidence MEDIUM
+
+# Fail on any findings (strict mode, not recommended)
+cleancloud scan --provider aws --region us-east-1  --fail-on-findings
+
+# use '--provider azure ' for Azure cloud 
+
+# AZURE
+
+# Fail only on HIGH confidence findings (recommended)
+cleancloud scan --provider azure --subscription <subscription-id> --fail-on-confidence HIGH
+
+# Fail on MEDIUM or higher confidence
+cleancloud scan --provider azure --subscription <subscription-id>  --fail-on-confidence MEDIUM
+
+# Fail on any findings (strict mode, not recommended)
+cleancloud scan --provider azure --subscription <subscription-id>  --fail-on-findings
+
+```
 ---
 
 ## CI/CD Examples
@@ -202,6 +239,7 @@ jobs:
           pip install cleancloud
           cleancloud scan \
             --provider aws \
+            --region us-east-1 \
             --output json \
             --output-file scan.json \
             --fail-on-confidence HIGH
@@ -213,23 +251,8 @@ jobs:
           path: scan.json
 
 ```
-
-### Policy Enforcement
-
-```bash
-# Fail only on HIGH confidence findings (recommended)
-cleancloud scan --fail-on-confidence HIGH
-
-# Fail on MEDIUM or higher confidence
-cleancloud scan --fail-on-confidence MEDIUM
-
-# Fail on any findings (strict mode, not recommended)
-cleancloud scan --fail-on-findings
-```
-
 See [`docs/ci.md`](docs/ci.md) for complete CI/CD integration examples.
 
----
 
 ## Configuration
 
@@ -245,8 +268,8 @@ CleanCloud supports three AWS authentication methods:
 
 ```bash
 # Using AWS profile
-aws configure --profile cleancloud
-cleancloud scan --provider aws --profile cleancloud --region us-east-1
+aws configure --profile <profile-name>
+cleancloud scan --provider aws --profile <profile-name> --region us-east-1
 ```
 
 **Environment Variables**
@@ -261,56 +284,9 @@ cleancloud scan --provider aws --region us-east-1
 
 **AWS IAM Policy (Minimum Read-Only Permissions)**
 
-Attach the following identity-based policy to the IAM role or user used by CleanCloud
+Attach the identity-based IAM policy as shown in [`docs/aws.md`](docs/aws.md)  to the IAM role or user used by CleanCloud
 (**including GitHub Actions OIDC roles**):
 
-```
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "EC2ReadOnly",
-            "Effect": "Allow",
-            "Action": [
-                "ec2:DescribeVolumes",
-                "ec2:DescribeSnapshots",
-                "ec2:DescribeInstances",
-                "ec2:DescribeRegions",
-                "ec2:DescribeAvailabilityZones",
-                "ec2:DescribeTags"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "CloudWatchLogsReadOnly",
-            "Effect": "Allow",
-            "Action": [
-                "logs:DescribeLogGroups",
-                "logs:DescribeLogStreams",
-                "logs:GetLogEvents"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "S3ReadOnly",
-            "Effect": "Allow",
-            "Action": [
-                "s3:ListAllMyBuckets",
-                "s3:GetBucketLocation",
-                "s3:GetBucketTagging",
-                "s3:ListBucket"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "STSIdentity",
-            "Effect": "Allow",
-            "Action": "sts:GetCallerIdentity",
-            "Resource": "*"
-        }
-    ]
-}
-```
 
 **Characteristics:**
 
@@ -374,6 +350,7 @@ jobs:
           pip install cleancloud
           cleancloud scan \
             --provider azure \
+            --subscription <subscription-id> \
             --output json \
             --output-file scan.json \
             --fail-on-confidence HIGH
