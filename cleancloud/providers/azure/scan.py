@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, Optional, Tuple
 
 import click
+from azure.core.exceptions import AzureError, HttpResponseError, ResourceNotFoundError
 
 from cleancloud.core.finding import Finding
 from cleancloud.output.progress import advance
@@ -115,9 +116,15 @@ def scan_azure_subscriptions(
                 sub_id = futures[future]
                 try:
                     all_findings.extend(future.result())
+                except RuntimeError as e:
+                    # RuntimeError indicates a complete subscription failure (all rules failed)
+                    # This is fatal for explicitly requested subscriptions
+                    click.echo(f"❌ Subscription {sub_id} failed: {e}")
+                    advance(bar)
+                    raise  # Re-raise to fail the entire scan
                 except Exception as e:
+                    # Other exceptions might be transient - log and continue
                     click.echo(f"⚠️ Subscription {sub_id} failed: {e}")
-                finally:
                     advance(bar)
 
     return all_findings
@@ -129,6 +136,10 @@ def _scan_azure_subscription(
     region_filter: Optional[str],
 ) -> List[Finding]:
     findings: List[Finding] = []
+    rules_succeeded = 0
+    rules_failed = 0
+    resource_not_found_errors = 0
+    permission_errors = 0
 
     with click.progressbar(
         length=len(AZURE_RULES),
@@ -151,10 +162,50 @@ def _scan_azure_subscription(
                 try:
                     rule_findings = future.result()
                     findings.extend(rule_findings)
+                    rules_succeeded += 1
+                except ResourceNotFoundError as e:
+                    # Resource not found - likely invalid subscription ID
+                    rules_failed += 1
+                    resource_not_found_errors += 1
+                    click.echo(f"⚠️ Azure rule failed in subscription {subscription_id}: {e}")
+                except HttpResponseError as e:
+                    # HTTP error - could be permissions (403), not found (404), etc.
+                    rules_failed += 1
+                    if e.status_code == 403:
+                        permission_errors += 1
+                    click.echo(f"⚠️ Azure rule failed in subscription {subscription_id}: {e}")
+                except AzureError as e:
+                    # Other Azure SDK errors
+                    rules_failed += 1
+                    click.echo(f"⚠️ Azure rule failed in subscription {subscription_id}: {e}")
                 except Exception as e:
-                    # Trust-first: never fail whole scan
+                    # Unexpected errors
+                    rules_failed += 1
                     click.echo(f"⚠️ Azure rule failed in subscription {subscription_id}: {e}")
                 finally:
                     advance(bar)
+
+    # If ALL rules failed due to resource not found, subscription is likely invalid
+    if rules_succeeded == 0 and resource_not_found_errors == rules_failed:
+        raise RuntimeError(
+            f"Subscription '{subscription_id}' appears to be invalid or inaccessible. "
+            f"All {rules_failed} rules failed with 'ResourceNotFound' errors. "
+            f"Check that the subscription ID is correct and accessible."
+        )
+
+    # If ALL rules failed due to permissions, credential may not have access
+    if rules_succeeded == 0 and permission_errors == rules_failed:
+        raise RuntimeError(
+            f"Subscription '{subscription_id}' denied access to all resources. "
+            f"All {rules_failed} rules failed with permission errors (403). "
+            f"Check that your credential has Reader role on this subscription."
+        )
+
+    # If ALL rules failed for any reason, something is seriously wrong
+    if rules_succeeded == 0 and rules_failed > 0:
+        raise RuntimeError(
+            f"All {rules_failed} rules failed in subscription '{subscription_id}'. "
+            f"This indicates a serious configuration or permissions issue."
+        )
 
     return findings

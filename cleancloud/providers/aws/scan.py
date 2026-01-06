@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, Optional, Tuple
 
+import botocore.exceptions
 import click
 
 from cleancloud.core.finding import Finding
@@ -185,9 +186,15 @@ def scan_aws_regions(
                 region = futures[future]
                 try:
                     findings.extend(future.result())
+                except RuntimeError as e:
+                    # RuntimeError indicates a complete region failure (all rules failed)
+                    # This is fatal for explicitly requested regions
+                    click.echo(f"❌ Region {region} failed: {e}")
+                    advance(bar)
+                    raise  # Re-raise to fail the entire scan
                 except Exception as e:
+                    # Other exceptions might be transient - log and continue
                     click.echo(f"⚠️  Region {region} failed: {e}")
-                finally:
                     advance(bar)
 
     return findings
@@ -196,6 +203,9 @@ def scan_aws_regions(
 def _scan_aws_region(profile: Optional[str], region: str) -> List[Finding]:
     session = create_aws_session(profile=profile, region=region)
     findings: List[Finding] = []
+    rules_succeeded = 0
+    rules_failed = 0
+    endpoint_errors = 0
 
     with click.progressbar(
         length=len(AWS_RULES),
@@ -210,11 +220,33 @@ def _scan_aws_region(profile: Optional[str], region: str) -> List[Finding]:
                 try:
                     rule_findings = future.result()
                     findings.extend(rule_findings)
+                    rules_succeeded += 1
+                except botocore.exceptions.EndpointConnectionError as e:
+                    # Endpoint connection error - likely invalid region
+                    rules_failed += 1
+                    endpoint_errors += 1
+                    click.echo(f"⚠️ Rule failed in {region}: {e}")
                 except Exception as e:
-                    # Trust-first: never fail whole scan
+                    # Other errors (permissions, throttling, etc.)
+                    rules_failed += 1
                     click.echo(f"⚠️ Rule failed in {region}: {e}")
                 finally:
                     advance(bar)
+
+    # If ALL rules failed due to endpoint errors, this is an invalid region
+    if rules_succeeded == 0 and endpoint_errors == rules_failed:
+        raise RuntimeError(
+            f"Region '{region}' appears to be invalid or inaccessible. "
+            f"All {rules_failed} rules failed with endpoint connectivity errors. "
+            f"Check that the region name is correct (e.g., us-east-1, eu-west-1)."
+        )
+
+    # If ALL rules failed for any reason, something is seriously wrong
+    if rules_succeeded == 0 and rules_failed > 0:
+        raise RuntimeError(
+            f"All {rules_failed} rules failed in region '{region}'. "
+            f"This indicates a serious configuration or permissions issue."
+        )
 
     # Ensure region is always set
     for f in findings:
