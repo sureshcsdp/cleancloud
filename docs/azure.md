@@ -92,11 +92,16 @@ jobs:
 # Login
 az login
 
-# Set subscription
-az account set --subscription <SUBSCRIPTION_ID>
-
-# Run scan
+# Scan all accessible subscriptions (default)
 cleancloud scan --provider azure
+
+# Scan specific subscription
+cleancloud scan --provider azure --subscription <SUBSCRIPTION_ID>
+
+# Scan multiple subscriptions
+cleancloud scan --provider azure \
+  --subscription <SUBSCRIPTION_ID_1> \
+  --subscription <SUBSCRIPTION_ID_2>
 ```
 
 CleanCloud automatically uses your active Azure CLI session.
@@ -179,6 +184,40 @@ cleancloud scan --provider azure
 # Scans all subscriptions the service principal can access
 ```
 
+### Subscription Filtering
+
+By default, CleanCloud scans **all accessible subscriptions**. You can filter to specific subscriptions:
+
+```bash
+# Default: Scan all accessible subscriptions
+cleancloud scan --provider azure
+
+# Scan specific subscription
+cleancloud scan --provider azure --subscription <SUBSCRIPTION_ID>
+
+# Scan multiple subscriptions
+cleancloud scan --provider azure \
+  --subscription <SUB_1> \
+  --subscription <SUB_2>
+```
+
+**When to use subscription filtering:**
+- **Enterprise scale**: Organizations with 50+ subscriptions
+- **Team ownership**: Scan only your team's subscriptions
+- **CI/CD pipelines**: Different pipelines for different subscriptions
+- **Testing**: Test on dev subscriptions before production
+- **Performance**: Faster scans targeting specific subscriptions
+
+**Subscription Validation:**
+CleanCloud validates that specified subscriptions are accessible:
+```bash
+cleancloud scan --provider azure --subscription invalid-sub-id
+# ⚠️ Warning: 1 subscription(s) not accessible:
+#   • invalid-sub-id
+#
+# ❌ Error: None of the specified subscriptions are accessible
+```
+
 ### Region Filtering
 
 ```bash
@@ -189,7 +228,7 @@ cleancloud scan --provider azure --region eastus
 cleancloud scan --provider azure --region westeurope
 ```
 
-**Note:** Unlike AWS, Azure scans all subscriptions by default. Region is an optional filter on results.
+**Note:** Region is an optional filter on results (not required like AWS).
 
 ---
 
@@ -242,7 +281,12 @@ az account show
 ```bash
 # Re-login
 az login
-az account set --subscription <SUBSCRIPTION_ID>
+
+# Scan all accessible subscriptions
+cleancloud scan --provider azure
+
+# Or scan specific subscription
+cleancloud scan --provider azure --subscription <SUBSCRIPTION_ID>
 ```
 
 ### "No accessible subscriptions"
