@@ -47,21 +47,37 @@ def _print_summary(summary: dict, region_selection_mode: str = None):
         for conf in sorted(by_conf):
             click.echo(f"  {conf}: {by_conf[conf]}")
 
-    # Regions scanned
+    # Regions/Subscriptions scanned
     regions_scanned = summary.get("regions_scanned", [])
     if isinstance(regions_scanned, list):
         regions_str = ", ".join(regions_scanned)
     else:
         regions_str = str(regions_scanned)
 
-    click.echo(f"\nRegions scanned: {regions_str}", nl=False)
-
-    if region_selection_mode == "all-regions":
-        click.echo(" (auto-detected)")
-    elif region_selection_mode == "explicit":
-        click.echo(" (explicit)")
+    # Use provider-aware label
+    provider = summary.get("provider", "aws")
+    if provider == "azure":
+        label = "Subscriptions scanned"
     else:
-        click.echo()
+        label = "Regions scanned"
+
+    click.echo(f"\n{label}: {regions_str}", nl=False)
+
+    # Selection mode annotations
+    if provider == "azure":
+        if region_selection_mode == "all":
+            click.echo(" (all accessible)")
+        elif region_selection_mode == "explicit":
+            click.echo(" (explicit)")
+        else:
+            click.echo()
+    else:  # AWS
+        if region_selection_mode == "all-regions":
+            click.echo(" (auto-detected)")
+        elif region_selection_mode == "explicit":
+            click.echo(" (explicit)")
+        else:
+            click.echo()
 
     click.echo(f"Scanned at: {summary['scanned_at']}")
 

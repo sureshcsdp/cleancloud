@@ -1,8 +1,13 @@
 import os
+import sys
 from typing import Optional
 
+import click
+
 from cleancloud.doctor.common import fail, info, success, warn
+from cleancloud.policy.exit_policy import EXIT_ERROR
 from cleancloud.providers.aws.session import create_aws_session
+from cleancloud.providers.aws.validate import KNOWN_AWS_REGIONS
 
 
 def detect_aws_auth_method(session) -> tuple[str, str, dict]:
@@ -158,6 +163,24 @@ def detect_aws_auth_method(session) -> tuple[str, str, dict]:
 def run_aws_doctor(profile: Optional[str], region: Optional[str] = None) -> None:
     if region is None:
         region = "us-east-1"
+
+    # Validate region before proceeding
+    if region not in KNOWN_AWS_REGIONS:
+        click.echo(f"❌ Error: '{region}' is not a valid AWS region")
+        click.echo()
+        click.echo("Common AWS regions:")
+        click.echo("  us-east-1, us-east-2, us-west-1, us-west-2")
+        click.echo("  eu-west-1, eu-central-1, ap-southeast-1, ap-northeast-1")
+        click.echo()
+        click.echo("All known regions:")
+        regions_list = sorted(KNOWN_AWS_REGIONS)
+        for i in range(0, len(regions_list), 4):
+            click.echo("  " + ", ".join(regions_list[i : i + 4]))
+        click.echo()
+        click.echo("💡 Tip: Doctor validates credentials using a single region")
+        click.echo("   Default region is us-east-1 if not specified")
+        sys.exit(EXIT_ERROR)
+
     info("")
     info("=" * 70)
     info("AWS ENVIRONMENT VALIDATION")

@@ -47,6 +47,14 @@ def run_doctor(
                 results[p] = {"status": "passed", "error": None}
 
             elif p == "azure":
+                # Warn if region is specified for Azure (it's ignored)
+                if region:
+                    info("")
+                    info("⚠️  Warning: --region parameter is not applicable for Azure")
+                    info("   Azure authentication and validation is not region-specific")
+                    info("   The --region parameter is only used for AWS provider")
+                    info("")
+
                 run_azure_doctor()
                 results[p] = {"status": "passed", "error": None}
 

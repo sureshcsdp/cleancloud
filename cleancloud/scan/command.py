@@ -168,6 +168,7 @@ def scan(
         summary["scanned_at"] = datetime.now(timezone.utc).isoformat()
         summary["regions_scanned"] = regions_scanned
         summary["region_selection_mode"] = region_selection_mode
+        summary["provider"] = provider
         summary["highest_confidence"] = max(
             (f.confidence for f in findings),
             default=None,
