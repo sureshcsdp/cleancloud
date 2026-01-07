@@ -15,7 +15,10 @@ from cleancloud.providers.azure.rules.untagged_resources import (
     find_untagged_resources as find_azure_untagged_resources,
 )
 from cleancloud.providers.azure.session import create_azure_session
-from cleancloud.providers.azure.validate import validate_subscription_params
+from cleancloud.providers.azure.validate import (
+    validate_region_params,
+    validate_subscription_params,
+)
 
 
 def scan_azure_with_region_selection(
@@ -25,6 +28,9 @@ def scan_azure_with_region_selection(
 ) -> Tuple[str, List[Finding], List[str]]:
     # Validate subscription parameters
     validate_subscription_params(subscriptions, all_subscriptions)
+
+    # Validate region parameter
+    validate_region_params(region)
 
     click.echo("🔍 Authenticating to Azure")
     click.echo()
