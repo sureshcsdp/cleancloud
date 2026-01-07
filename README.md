@@ -90,9 +90,11 @@ Exit codes are stable and intentional:
 | Code | Meaning |
 |------|---------|
 | `0` | Scan completed successfully, no blocking findings |
-| `1` | Configuration or unexpected error |
+| `1` | Configuration error, invalid region/location, or unexpected error |
 | `2` | Policy violation (findings detected with `--fail-on-findings` or `--fail-on-confidence`) |
 | `3` | Missing permissions or invalid credentials |
+
+**Note:** Invalid region names (AWS) or location names (Azure) trigger exit code `1` immediately, before attempting API calls.
 
 CleanCloud never fails a build by accident.
 
@@ -107,10 +109,13 @@ pip install cleancloud
 ### Validate Credentials
 
 ```bash
-# AWS
-cleancloud doctor --provider aws --region us-east-1
+# AWS - validate credentials and permissions
+# Defaults to us-east-1 if --region not specified
+cleancloud doctor --provider aws
+cleancloud doctor --provider aws --region us-west-2
 
-# Azure
+# Azure - validate credentials and subscription access
+# Note: --region parameter is not applicable for Azure doctor
 cleancloud doctor --provider azure
 ```
 
@@ -120,7 +125,7 @@ cleancloud doctor --provider azure
 # AWS - single region
 cleancloud scan --provider aws --region us-east-1
 
-# AWS - all regions
+# AWS - all active regions (auto-detects regions with resources)
 cleancloud scan --provider aws --all-regions
 
 # Azure - all subscriptions (default)
@@ -131,6 +136,12 @@ cleancloud scan --provider azure --subscription <subscription-id>
 
 # Azure - multiple subscriptions
 cleancloud scan --provider azure --subscription <sub-id-1> --subscription <sub-id-2>
+
+# Azure - filter by location
+cleancloud scan --provider azure --region eastus
+
+# Azure - specific subscription and location
+cleancloud scan --provider azure --subscription <subscription-id> --region eastus
 ```
 
 ### View Results
@@ -139,17 +150,25 @@ cleancloud scan --provider azure --subscription <sub-id-1> --subscription <sub-i
 # Human-readable output (default)
 cleancloud scan --provider aws --region us-east-1
 
-# JSON output
+# JSON output (AWS)
 cleancloud scan --provider aws --region us-east-1 --output json --output-file results.json
+
+# JSON output (Azure)
+cleancloud scan --provider azure --output json --output-file results.json
 
 # CSV output
 cleancloud scan --provider aws --region us-east-1 --output csv --output-file results.csv
+```
 
-# Azure JSON output
-cleancloud scan --provider azure --subscription <subscription-id> --output json --output-file results.json
+**JSON Output Schema:**
 
-# Azure CSV output
-cleancloud scan --provider azure --subscription <subscription-id> --output csv --output-file results.csv
+AWS and Azure have slightly different schema structures:
+- **AWS**: `regions_scanned` contains AWS region names (e.g., `["us-east-1", "us-west-2"]`)
+- **Azure**:
+  - `regions_scanned` contains Azure location names (e.g., `["eastus", "westus2"]`)
+  - `subscriptions_scanned` contains subscription IDs (e.g., `["29d91ee0-..."]`)
+
+See [`docs/ci.md#json-output-machine-readable`](docs/ci.md#json-output-machine-readable) for complete schema examples.
 
 ```
 
@@ -171,30 +190,38 @@ Each rule:
 
 ### Policy Enforcement
 
-```bash
-# AWS
+Control pipeline behavior based on finding confidence levels:
 
+**AWS Examples:**
+
+```bash
 # Fail only on HIGH confidence findings (recommended)
 cleancloud scan --provider aws --region us-east-1 --fail-on-confidence HIGH
 
 # Fail on MEDIUM or higher confidence
-cleancloud scan --provider aws --region us-east-1  --fail-on-confidence MEDIUM
+cleancloud scan --provider aws --region us-east-1 --fail-on-confidence MEDIUM
 
 # Fail on any findings (strict mode, not recommended)
-cleancloud scan --provider aws --region us-east-1  --fail-on-findings
+cleancloud scan --provider aws --region us-east-1 --fail-on-findings
+```
 
-# use '--provider azure ' for Azure cloud 
+**Azure Examples:**
 
-# AZURE
-
+```bash
 # Fail only on HIGH confidence findings (recommended)
-cleancloud scan --provider azure --subscription <subscription-id> --fail-on-confidence HIGH
+cleancloud scan --provider azure --fail-on-confidence HIGH
 
 # Fail on MEDIUM or higher confidence
-cleancloud scan --provider azure --subscription <subscription-id>  --fail-on-confidence MEDIUM
+cleancloud scan --provider azure --fail-on-confidence MEDIUM
 
 # Fail on any findings (strict mode, not recommended)
-cleancloud scan --provider azure --subscription <subscription-id>  --fail-on-findings
+cleancloud scan --provider azure --fail-on-findings
+
+# With specific subscription
+cleancloud scan --provider azure --subscription <subscription-id> --fail-on-confidence HIGH
+```
+
+**Note:** Policy enforcement works identically for both AWS and Azure providers.
 
 ```
 ---
@@ -350,12 +377,15 @@ jobs:
           pip install cleancloud
           cleancloud scan \
             --provider azure \
-            --subscription <subscription-id> \
             --output json \
             --output-file scan.json \
             --fail-on-confidence HIGH
+          # Note: Scans all accessible subscriptions by default
+          # Use --subscription <id> to scan specific subscription(s)
+          # Use --region <location> to filter by Azure location (e.g., eastus)
 
       - name: Upload results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cleancloud-results
@@ -437,9 +467,9 @@ This is useful when certain environments, teams, or services should be out of sc
 
 ### Configuration File (cleancloud.yaml)
 
-Create a cleancloud.yaml file in your project root:
+Create a `cleancloud.yaml` file in your project root (or specify a custom path with `--config`):
 
-```
+```yaml
 version: 1
 
 tag_filtering:
@@ -450,13 +480,22 @@ tag_filtering:
     - key: team
       value: platform
     - key: keep   # key-only match (any value)
+```
 
+**Usage:**
+
+```bash
+# With config file in repository root
+cleancloud scan --provider aws --region us-east-1 --config cleancloud.yaml
+
+# Or specify full path
+cleancloud scan --provider aws --region us-east-1 --config /path/to/cleancloud.yaml
 ```
 
 **Behavior:**
 * If a resource has any matching tag, its finding is ignored
 * Matching is exact (no regex, no partial matches)
-* Multiple ignore rules are OR’ed (any match ignores)
+* Multiple ignore rules are OR'ed (any match ignores)
 
 
 ### Command Line Overrides (Highest Priority)

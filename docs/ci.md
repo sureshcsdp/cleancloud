@@ -25,9 +25,43 @@ CleanCloud uses standard Unix exit codes for CI control:
 | Exit Code | Meaning | CI Behavior |
 |-----------|---------|-------------|
 | `0` | Success - no policy violations | Pipeline continues |
-| `1` | Configuration error or unexpected failure | Pipeline fails |
+| `1` | Configuration error, invalid region/location, or unexpected failure | Pipeline fails |
 | `2` | Policy violation - findings detected | Pipeline fails (when enforcement enabled) |
 | `3` | Missing credentials or insufficient permissions | Pipeline fails |
+
+**Note:** Invalid region names (AWS) or location names (Azure) now trigger exit code `1` early in the scan, before attempting API calls.
+
+---
+
+## Region and Location Naming
+
+CleanCloud validates region/location names based on the provider:
+
+### AWS Regions
+
+AWS uses region names like:
+- `us-east-1`, `us-west-2` (United States)
+- `eu-west-1`, `eu-central-1` (Europe)
+- `ap-southeast-1`, `ap-northeast-1` (Asia Pacific)
+
+```bash
+# AWS example
+cleancloud scan --provider aws --region us-east-1
+```
+
+### Azure Locations
+
+Azure uses location names like:
+- `eastus`, `westus2` (United States)
+- `northeurope`, `westeurope` (Europe)
+- `southeastasia`, `japaneast` (Asia Pacific)
+
+```bash
+# Azure example
+cleancloud scan --provider azure --region eastus
+```
+
+**Important:** Don't mix AWS and Azure naming! Using `us-east-1` with Azure will trigger an error.
 
 ---
 
@@ -102,7 +136,10 @@ jobs:
         run: pip install cleancloud
 
       - name: Validate credentials
-        run: cleancloud doctor --provider aws
+        run: |
+          # Validates credentials and permissions
+          # Uses us-east-1 by default, or specify --region
+          cleancloud doctor --provider aws
 
       - name: Run hygiene scan
         run: |
@@ -157,7 +194,10 @@ jobs:
         run: pip install cleancloud
 
       - name: Validate credentials
-        run: cleancloud doctor --provider azure
+        run: |
+          # Azure doctor validates credentials and subscription access
+          # Note: --region parameter is not applicable for Azure
+          cleancloud doctor --provider azure
 
       - name: Run hygiene scan
         run: |
@@ -166,6 +206,9 @@ jobs:
             --output json \
             --output-file scan-results.json \
             --fail-on-confidence HIGH
+          # Note: Scans all accessible subscriptions by default
+          # Use --subscription <id> to scan specific subscription(s)
+          # Use --region <location> to filter by Azure location (e.g., eastus, westeurope)
 
       - name: Upload scan results
         if: always()
@@ -192,54 +235,70 @@ permissions:
 jobs:
   scan-aws:
     runs-on: ubuntu-latest
+    continue-on-error: true  # Don't fail entire workflow if one provider fails
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/CleanCloudCIReadOnly
           aws-region: us-east-1
-      
+
+      - name: Install CleanCloud
+        run: pip install cleancloud
+
       - name: Scan AWS
         run: |
-          pip install cleancloud
           cleancloud scan \
             --provider aws \
             --all-regions \
             --output json \
-            --output-file aws-results.json
-      
-      - uses: actions/upload-artifact@v4
+            --output-file aws-results.json \
+            --fail-on-confidence HIGH
+
+      - name: Upload AWS results
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: aws-scan-results
           path: aws-results.json
+          retention-days: 30
 
   scan-azure:
     runs-on: ubuntu-latest
+    continue-on-error: true  # Don't fail entire workflow if one provider fails
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
+
+      - name: Install CleanCloud
+        run: pip install cleancloud
+
       - name: Scan Azure
         run: |
-          pip install cleancloud
           cleancloud scan \
             --provider azure \
             --output json \
-            --output-file azure-results.json
-      
-      - uses: actions/upload-artifact@v4
+            --output-file azure-results.json \
+            --fail-on-confidence HIGH
+
+      - name: Upload Azure results
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: azure-scan-results
           path: azure-results.json
+          retention-days: 30
 ```
+
+**Note:** Using `continue-on-error: true` allows the workflow to complete even if one cloud provider scan fails, ensuring you get results from all providers.
 
 ---
 
@@ -255,14 +314,18 @@ cleancloud scan \
   --output-file results.json
 ```
 
-**Schema:**
+The JSON output schema varies slightly between providers to accommodate their different organizational models (AWS regions vs Azure subscriptions).
+
+**AWS Schema Example:**
 ```json
 {
   "summary": {
     "total_findings": 12,
     "by_risk": {"MEDIUM": 12},
     "by_confidence": {"HIGH": 8, "MEDIUM": 4},
-    "regions_scanned": ["us-east-1"],
+    "regions_scanned": ["us-east-1", "us-west-2"],
+    "region_selection_mode": "all-regions",
+    "provider": "aws",
     "scanned_at": "2025-01-15T10:30:00Z"
   },
   "findings": [
@@ -277,6 +340,39 @@ cleancloud scan \
   ]
 }
 ```
+
+**Azure Schema Example:**
+```json
+{
+  "summary": {
+    "total_findings": 5,
+    "by_risk": {"LOW": 5},
+    "by_confidence": {"MEDIUM": 5},
+    "regions_scanned": ["eastus", "westus2"],
+    "subscriptions_scanned": ["29d91ee0-922f-483a-a81f-1a5eff4ecfa2"],
+    "subscription_selection_mode": "all",
+    "provider": "azure",
+    "scanned_at": "2025-01-15T10:30:00Z"
+  },
+  "findings": [
+    {
+      "rule_id": "azure.disk.unattached",
+      "resource_id": "/subscriptions/.../disks/disk1",
+      "confidence": "MEDIUM",
+      "risk": "LOW",
+      "region": "eastus",
+      "details": {...}
+    }
+  ]
+}
+```
+
+**Important Notes:**
+- **Azure uses `subscription_selection_mode`** (not `region_selection_mode` like AWS) - values are "all" or "explicit"
+- `regions_scanned` lists unique Azure locations from all findings across scanned subscriptions
+- `subscriptions_scanned` lists the Azure subscription IDs that were scanned
+- Individual findings contain the Azure location in the `region` field (e.g., "eastus", "westeurope")
+- The `--region` parameter for Azure is a **filter** (filters findings by location), not a selection mode
 
 ### CSV Output (Spreadsheet-Friendly)
 
@@ -305,7 +401,7 @@ Exclude resources from scans using tags:
 
 ### Configuration File
 
-Create `cleancloud.yaml`:
+Create `cleancloud.yaml` in your repository root (or specify path with `--config`):
 
 ```yaml
 version: 1
@@ -322,10 +418,17 @@ tag_filtering:
 
 Use in CI/CD:
 ```bash
+# With config file in repository root
 cleancloud scan \
   --provider aws \
   --region us-east-1 \
   --config cleancloud.yaml
+
+# Or specify full path
+cleancloud scan \
+  --provider aws \
+  --region us-east-1 \
+  --config /path/to/cleancloud.yaml
 ```
 
 ### Command Line Override
@@ -350,10 +453,12 @@ cleancloud scan \
 - name: Scan development account
   run: |
     cleancloud scan --provider aws --region us-east-1
-    # Exits 0 even with findings
+    # Exits 0 even with findings - useful for visibility without blocking
 ```
 
-### Pattern 2: Staging - Warn on HIGH Confidence
+**Use case:** Early development, learning what issues exist without blocking deployments.
+
+### Pattern 2: Staging - Fail on HIGH Confidence Only
 
 ```yaml
 - name: Scan staging account
@@ -361,9 +466,13 @@ cleancloud scan \
     cleancloud scan \
       --provider aws \
       --all-regions \
-      --fail-on-confidence HIGH
-    # Fails pipeline if HIGH confidence findings exist
+      --fail-on-confidence HIGH \
+      --output json \
+      --output-file scan-results.json
+    # Fails pipeline only if HIGH confidence findings exist
 ```
+
+**Use case:** Pre-production validation with balanced enforcement.
 
 ### Pattern 3: Production - Block Any Findings
 
@@ -373,11 +482,37 @@ cleancloud scan \
     cleancloud scan \
       --provider aws \
       --all-regions \
-      --fail-on-findings
-    # Fails pipeline if any findings exist
+      --fail-on-findings \
+      --output json \
+      --output-file scan-results.json
+    # Fails pipeline if any findings exist (strictest mode)
 ```
 
-### Pattern 4: Scheduled Weekly Reports
+**Use case:** Production accounts with zero-tolerance hygiene policy.
+
+### Pattern 4: Azure Multi-Subscription Scan
+
+```yaml
+- name: Scan Azure subscriptions
+  run: |
+    # Scan all accessible subscriptions
+    cleancloud scan \
+      --provider azure \
+      --fail-on-confidence HIGH \
+      --output json \
+      --output-file azure-scan.json
+
+    # Or scan specific subscriptions
+    cleancloud scan \
+      --provider azure \
+      --subscription sub-id-1 \
+      --subscription sub-id-2 \
+      --fail-on-confidence HIGH
+```
+
+**Use case:** Managing multiple Azure subscriptions with consistent hygiene standards.
+
+### Pattern 5: Scheduled Weekly Reports
 
 ```yaml
 on:
@@ -387,19 +522,31 @@ on:
 jobs:
   weekly-scan:
     steps:
-      - name: Run scan
+      - name: Install CleanCloud
+        run: pip install cleancloud
+
+      - name: Run comprehensive scan
         run: |
           cleancloud scan \
             --provider aws \
             --all-regions \
             --output json \
-            --output-file weekly-report.json
-      
+            --output-file weekly-report-$(date +%Y-%m-%d).json
+
       - name: Upload to S3
         run: |
-          aws s3 cp weekly-report.json \
-            s3://my-bucket/cleancloud/$(date +%Y-%m-%d).json
+          aws s3 cp weekly-report-*.json \
+            s3://my-compliance-bucket/cleancloud/
+
+      - name: Upload as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-scan-report
+          path: weekly-report-*.json
+          retention-days: 90
 ```
+
+**Use case:** Regular compliance reporting and trend analysis.
 
 ---
 
@@ -427,30 +574,70 @@ jobs:
 ### Single Region Scans (Fastest)
 
 ```bash
+# AWS - specify single region
 cleancloud scan --provider aws --region us-east-1
-# 15-30 seconds
+
+# Azure - filter by single location
+cleancloud scan --provider azure --region eastus
 ```
 
-### Auto-Detected Active Regions (Balanced)
+**Use case:** Quick targeted scans or region-specific validation.
+
+### Auto-Detected Active Regions (Recommended)
 
 ```bash
+# AWS - scans only regions with active resources
 cleancloud scan --provider aws --all-regions
-# 2-3 minutes (scans 3-5 active regions)
+
+# Azure - scans all accessible subscriptions (default)
+cleancloud scan --provider azure
 ```
 
-### All Enabled Regions (Comprehensive)
+**Use case:** Comprehensive scans without wasting time on empty regions. AWS auto-detects 3-5 active regions typically.
+
+### Multi-Region AWS Scans
 
 ```bash
-# This is not recommended - use --all-regions which auto-detects
-cleancloud scan --provider aws --region us-east-1,us-west-2,eu-west-1,...
-# 8-10 minutes (25+ regions)
+# ❌ INCORRECT - comma-separated regions not supported
+cleancloud scan --provider aws --region us-east-1,us-west-2
+
+# ✅ CORRECT - use --all-regions for multiple regions
+cleancloud scan --provider aws --all-regions
 ```
 
-**Recommendation:** Use `--all-regions` for comprehensive scans (auto-detects active regions only).
+**Note:** To scan specific multiple regions, you must run separate scans per region. Use `--all-regions` for the best balance of coverage and performance.
+
+### Azure Subscription Filtering
+
+```bash
+# Scan specific subscription
+cleancloud scan --provider azure --subscription <subscription-id>
+
+# Scan all subscriptions (default)
+cleancloud scan --provider azure --all-subscriptions
+```
+
+**Recommendation:** Use `--all-regions` for AWS to automatically detect and scan only active regions.
 
 ---
 
 ## Troubleshooting
+
+### Pipeline Fails with Exit Code 1 (Invalid Region)
+
+**Issue:** Invalid region or location name
+
+**Error examples:**
+```
+❌ Error: 'us-east-1' is not a valid Azure location
+❌ Error: 'eastus' is not a valid AWS region
+```
+
+**Fix:**
+- **AWS:** Use region names like `us-east-1`, `eu-west-1`, `ap-southeast-1`
+- **Azure:** Use location names like `eastus`, `westeurope`, `southeastasia`
+
+See the [Region and Location Naming](#region-and-location-naming) section for complete lists.
 
 ### Pipeline Fails with Exit Code 3
 
@@ -458,36 +645,60 @@ cleancloud scan --provider aws --region us-east-1,us-west-2,eu-west-1,...
 
 **Fix:**
 ```bash
-# Validate setup
+# Validate setup first
 cleancloud doctor --provider aws
 cleancloud doctor --provider azure
 ```
 
 Check:
-- Secrets are configured correctly
-- IAM/RBAC roles have required permissions
-- Trust policies allow your repo/branch
+- Secrets are configured correctly in your CI platform
+- IAM/RBAC roles have required permissions (ReadOnly access)
+- Trust policies allow your repo/branch to assume roles
+- For AWS: OIDC role trust relationship is configured
+- For Azure: Federated credentials are configured
 
 ### Pipeline Fails with Exit Code 2
 
 **Issue:** Policy violation - findings detected
 
-**Expected behavior** when using `--fail-on-findings` or `--fail-on-confidence`.
+**This is expected behavior** when using `--fail-on-findings` or `--fail-on-confidence`.
 
-**Fix:**
-1. Review findings in artifacts
-2. Clean up resources or adjust policy threshold
-3. Use tag filtering to exclude known resources
+**Options:**
+1. Review findings in uploaded artifacts
+2. Clean up flagged resources
+3. Adjust policy threshold (e.g., `--fail-on-confidence HIGH` instead of `MEDIUM`)
+4. Use tag filtering to exclude known/acceptable resources
 
 ### Scan Takes Too Long
 
-**Issue:** Scanning all 25+ AWS regions
+**Issue:** Scanning too many regions or subscriptions
 
-**Fix:**
+**Fix for AWS:**
 ```bash
-# Use auto-detection instead
+# Use auto-detection instead of scanning all regions
 cleancloud scan --provider aws --all-regions
-# Only scans regions with resources (3-5 typically)
+# Only scans regions with active resources (typically 3-5 regions)
+```
+
+**Fix for Azure:**
+```bash
+# Scan specific subscription instead of all
+cleancloud scan --provider azure --subscription <subscription-id>
+```
+
+### Azure Doctor Shows Region Warning
+
+**Issue:** Seeing "Warning: --region parameter is not applicable for Azure"
+
+**Explanation:** The `--region` parameter is AWS-specific for the doctor command. Azure doctor validates subscription access, which is not region-specific.
+
+**Fix:** Remove `--region` when running Azure doctor:
+```bash
+# Correct
+cleancloud doctor --provider azure
+
+# Incorrect
+cleancloud doctor --provider azure --region eastus
 ```
 
 ---
