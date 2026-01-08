@@ -1,6 +1,7 @@
 # CleanCloud
 
-**Read-only, conservative cloud hygiene scanning for production environments.**
+**A trust-first cloud hygiene engine for production environments.
+CleanCloud provides conservative, read-only hygiene signals for AWS and Azure that are safe to run in production and CI pipelines.**
 
 CleanCloud helps SRE and platform teams safely identify **review-only candidates**
 for orphaned, untagged, or inactive cloud resources — **without deleting anything,
@@ -34,6 +35,8 @@ CleanCloud exists to answer one question safely:
 
 ## Why CleanCloud?
 
+CleanCloud uses multiple conservative signals and assigns explicit confidence levels (LOW / MEDIUM / HIGH) to every finding, so teams can enforce policy without false positives.
+
 Modern cloud environments continuously create and destroy resources.
 Over time, **storage and logs lose ownership**, and deleting them becomes risky.
 
@@ -50,9 +53,23 @@ Most tools do one of two things:
 
 This makes it safe to run in **production accounts and CI pipelines**.
 
+---
+
+### What makes CleanCloud different
+
+| CleanCloud | Typical tools |
+|----------|---------------|
+| Read-only, review-only | Auto-delete or mutate |
+| Explicit confidence levels | Binary flags |
+| Conservative signal design | Noisy heuristics |
+| Safe for CI and prod | Often blocked by security |
+| No telemetry | Hidden data collection |
+
+---
+
 ## Where CleanCloud Fits
 
-CleanCloud is intentionally designed as a **read-only, review-only cloud hygiene tool**.
+CleanCloud is designed to generate trusted hygiene signals that can be consumed by humans, CI pipelines, or higher-level security and observability platforms.
 
 It sits between:
 - native cloud provider checks (e.g. AWS Config, Trusted Advisor)
@@ -97,6 +114,12 @@ Exit codes are stable and intentional:
 **Note:** Invalid region names (AWS) or location names (Azure) trigger exit code `1` immediately, before attempting API calls.
 
 CleanCloud never fails a build by accident.
+
+### Stability guarantees
+
+- CLI flags are backward-compatible within a major version
+- Exit codes are stable and intentional
+- JSON output schemas are versioned and documented
 
 ## Quick Start
 
@@ -170,8 +193,6 @@ AWS and Azure have slightly different schema structures:
 
 See [`docs/ci.md#json-output-machine-readable`](docs/ci.md#json-output-machine-readable) for complete schema examples.
 
-```
-
 ---
 
 ## What CleanCloud Detects
@@ -223,7 +244,6 @@ cleancloud scan --provider azure --subscription <subscription-id> --fail-on-conf
 
 **Note:** Policy enforcement works identically for both AWS and Azure providers.
 
-```
 ---
 
 ## CI/CD Examples
@@ -615,7 +635,7 @@ This makes CleanCloud safe for:
 > Roadmap items are added only after conservative signal design and safety review.
 
 ### Coming Soon
-- GCP support
+- GCP support (read-only, parity with existing trust guarantees)
 - Additional AWS rules (unused Elastic IPs, old AMIs, empty security groups)
 - Additional Azure rules (unused NICs, old images)
 - Rule filtering (`--rules` flag)
