@@ -91,6 +91,11 @@ CleanCloud is designed to be approved by security teams, not bypassed.
 - 🔒 No credentials stored
 - 🔐 Short-lived tokens only
 - 🧪 Safety regression tests prevent write APIs
+- 🌐 Zero outbound calls (except AWS/Azure APIs)
+
+→ **For InfoSec teams:** [Information Security Readiness Guide](docs/infosec-readiness.md)
+→ **IAM Proof Pack:** [Ready-to-use policies and verification scripts](security/) | [Documentation](docs/infosec-readiness.md#iam-proof-pack)
+→ **Threat Model:** [Comprehensive threat analysis and mitigations](docs/infosec-readiness.md#threat-model)
 
 ## CI/CD at a Glance
 
@@ -654,6 +659,8 @@ CleanCloud will remain focused on **safe hygiene detection**, not automation or 
 
 ## Documentation
 
+- [`docs/infosec-readiness.md`](docs/infosec-readiness.md) - Information security readiness guide for enterprise teams
+- [`security/`](security/) - IAM Proof Pack (ready-to-use policies and verification scripts)
 - [`docs/rules.md`](docs/rules.md) - Detailed rule behavior and signals
 - [`docs/aws.md`](docs/aws.md) - AWS setup and IAM policy
 - [`docs/azure.md`](docs/azure.md) - Azure setup and RBAC configuration
