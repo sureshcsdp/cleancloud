@@ -67,6 +67,94 @@ This makes it safe to run in **production accounts and CI pipelines**.
 
 ---
 
+## Why Not Just Use the Cloud Portal?
+
+Cloud portals (AWS, Azure, GCP) are excellent for **visibility**.  
+CleanCloud exists for **evaluation and automation**.
+
+### Portals show state. CleanCloud applies judgement.
+
+Portals answer:
+- “What resources exist right now?”
+- “Which ones are untagged or unattached?”
+
+CleanCloud answers:
+- “Is this a hygiene risk worth caring about?”
+- “How confident are we in that assessment?”
+- “Is this safe to act on automatically?”
+
+---
+
+### Key Differences
+
+| Cloud Portal | CleanCloud |
+|-------------|-----------|
+| Inventory & dashboards | Hygiene evaluation engine |
+| Binary states (yes/no) | Confidence-scored findings |
+| Manual inspection | Automation & CI/CD-ready |
+| Provider-specific | Consistent across clouds |
+| UI-driven & changeable | Deterministic, versioned output |
+
+---
+
+### Automation vs Manual Review
+
+Portals require:
+- Clicking through UIs
+- Human judgement
+- Ad-hoc decisions
+- No reproducibility
+
+CleanCloud provides:
+- CLI-first, scriptable checks
+- Deterministic output
+- Explainable reasoning
+- Stable behaviour over time
+
+This makes CleanCloud suitable for:
+- CI/CD pipelines
+- Pre-deployment hygiene checks
+- Periodic governance reviews
+- Audits and reporting
+
+---
+
+### Evaluation, Not Just Information
+
+Portals show **raw facts**:
+- “This disk is unattached”
+- “This resource has no tags”
+
+CleanCloud evaluates **risk and intent**:
+- Age and lifecycle context
+- Resource relationships
+- Safety-biased rules
+- Likelihood of false positives
+
+Every finding includes a **confidence level**, so teams know what is safe to act on and what requires review.
+
+---
+
+### Designed to Complement the Portal
+
+CleanCloud does not replace the cloud portal.
+
+- Use the **portal** to explore and investigate
+- Use **CleanCloud** to evaluate, automate, and standardise hygiene
+
+> **The portal shows you what exists.  
+> CleanCloud tells you what matters.**
+
+---
+
+### Built for Trust
+- Read-only by design
+- No deletion, tagging, or mutation
+- No telemetry or outbound calls
+- Safe for cautious and regulated environments
+
+---
+
 ## Where CleanCloud Fits
 
 CleanCloud is designed to generate trusted hygiene signals that can be consumed by humans, CI pipelines, or higher-level security and observability platforms.
