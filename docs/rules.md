@@ -41,7 +41,7 @@ Every finding includes a confidence level:
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **HIGH:** Unattached ≥ 14 days
 - **MEDIUM:** Unattached 7-13 days
@@ -69,7 +69,7 @@ Confidence thresholds and signal weighting are documented in ([docs/confidence.m
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **HIGH:** Age ≥ 365 days
 
@@ -94,7 +94,7 @@ Confidence thresholds and signal weighting are documented in ([docs/confidence.m
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **HIGH:** No retention policy, ≥ 30 days old
 
@@ -125,7 +125,7 @@ Confidence thresholds and signal weighting are documented in ([docs/confidence.m
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **MEDIUM:** Zero tags (always MEDIUM, never HIGH)
 
@@ -151,7 +151,7 @@ Confidence thresholds and signal weighting are documented in ([docs/confidence.m
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **HIGH:** Unattached ≥ 14 days
 - **MEDIUM:** Unattached 7-13 days
@@ -180,7 +180,7 @@ if disk.managed_by is None:  # Not attached
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **HIGH:** Age ≥ 90 days
 - **MEDIUM:** Age ≥ 30 days
@@ -206,7 +206,7 @@ Confidence thresholds and signal weighting are documented in ([docs/confidence.m
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **HIGH:** Not attached (deterministic state)
 
@@ -236,7 +236,7 @@ if public_ip.ip_configuration is None:
 
 **Confidence:**
 
-Confidence thresholds and signal weighting are documented in ([docs/confidence.md](docs/confidence.md)).
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
 - **MEDIUM:** Untagged disk that's also unattached
 - **LOW:** Untagged snapshot or attached disk

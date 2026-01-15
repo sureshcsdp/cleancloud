@@ -6,16 +6,18 @@ Thank you for your interest in CleanCloud! We welcome contributions from the com
 
 ## About the Project
 
-CleanCloud is an actively maintained cloud hygiene engine focused on safe, explainable, read-only detection of orphaned and inactive resources across AWS and Azure.
+CleanCloud is a **trust-first cloud hygiene engine** designed for production and enterprise environments. It provides read-only, confidence-scored hygiene signals for AWS and Azure that are safe to run in production and CI/CD pipelines.
 
-If you use CleanCloud internally, consider starring the project to help signal demand and guide future investment.
+**Key Focus Areas:**
+- ✅ **Read-only by design** - No mutations, deletions, or modifications
+- ✅ **Enterprise-ready** - OIDC authentication, policy enforcement, audit-friendly
+- ✅ **Conservative signals** - Explicit confidence levels (LOW/MEDIUM/HIGH)
+- ✅ **Production-safe** - Multi-layer safety regression tests
 
-The project is open to:
-- Strategic partnerships
-- Commercial licensing
-- Integration discussions
-
-For business inquiries, please open a GitHub issue with the `business` label.
+**If you use CleanCloud:**
+- ⭐ Star the project to help signal adoption and guide investment
+- 💬 Share feedback in [GitHub Discussions](https://github.com/cleancloud-io/cleancloud/discussions)
+- 📧 For business inquiries (partnerships, licensing, integrations): suresh@getcleancloud.com
 
 ---
 
@@ -231,7 +233,7 @@ Violations will result in:
 2. Temporary ban
 3. Permanent ban
 
-Report issues to: [maintainer email or issue tracker]
+**Report violations to:** suresh@getcleancloud.com or via private message to repository maintainers
 
 ---
 
@@ -239,16 +241,32 @@ Report issues to: [maintainer email or issue tracker]
 
 ### Running CleanCloud Locally
 
+**Set up credentials first:**
+
 ```bash
-# AWS scan (uses your AWS CLI credentials)
+# AWS - using environment variables
+export AWS_ACCESS_KEY_ID=<your-access-key>
+export AWS_SECRET_ACCESS_KEY=<your-secret-key>
+export AWS_DEFAULT_REGION=us-east-1
+
+# Azure - using service principal
+export AZURE_CLIENT_ID=<your-client-id>
+export AZURE_TENANT_ID=<your-tenant-id>
+export AZURE_CLIENT_SECRET=<your-client-secret>
+export AZURE_SUBSCRIPTION_ID=<your-subscription-id>
+```
+
+**Run scans:**
+
+```bash
+# AWS scan
 python -m cleancloud.cli scan --provider aws --region us-east-1
 
-# Azure scan (requires environment variables)
-export AZURE_CLIENT_ID=...
-export AZURE_TENANT_ID=...
-export AZURE_CLIENT_SECRET=...
+# Azure scan
 python -m cleancloud.cli scan --provider azure
 ```
+
+> **Note:** AWS CLI profiles and Azure CLI (`az login`) are also supported. See [docs/aws.md](docs/aws.md) and [docs/azure.md](docs/azure.md) for all authentication methods.
 
 ### Debugging
 
@@ -267,8 +285,14 @@ python -m pdb -m cleancloud.cli scan --provider aws
 pytest tests/providers/aws/rules/test_my_new_rule.py -v
 
 # Test with real credentials (use test account!)
-AWS_PROFILE=test-account cleancloud scan --provider aws
+# Set up test account credentials first
+export AWS_ACCESS_KEY_ID=<test-account-key>
+export AWS_SECRET_ACCESS_KEY=<test-account-secret>
+
+cleancloud scan --provider aws --region us-east-1
 ```
+
+> **Warning:** Always use a dedicated test account for development. Never test against production.
 
 ---
 
@@ -284,7 +308,7 @@ AWS_PROFILE=test-account cleancloud scan --provider aws
 
 **Security issues?**
 - Do NOT open a public issue
-- Email: [security contact - you should add one]
+- Email: suresh@getcleancloud.com (subject: "Security Issue")
 - We'll respond within 48 hours
 
 ---
@@ -300,8 +324,11 @@ All contributions must be your original work or properly attributed.
 ## Recognition
 
 Contributors will be:
-- Listed in CONTRIBUTORS.md (if created)
-- Mentioned in release notes for their contributions
-- Credited in documentation for significant features
+- ✨ Mentioned in release notes for their contributions
+- 📝 Credited in documentation for significant features
+- 🏆 Listed in CONTRIBUTORS.md (for substantial contributions)
+- 💼 Referenced for enterprise features on our website (with permission)
+
+**We value all contributions** - whether it's fixing a typo, improving documentation, or adding a major feature. Every contribution helps make CleanCloud better for enterprise teams worldwide.
 
 Thank you for helping make CleanCloud better! 🎉

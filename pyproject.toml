@@ -5,25 +5,31 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cleancloud"
 version = "0.6.0"
-description = "Safe, conservative cloud hygiene scanning for AWS and Azure"
+description = "Trust-first cloud hygiene engine for production environments. Read-only, confidence-scored hygiene signals for AWS and Azure."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-    {name = "CleanCloud", email = "suresh.csdp@gmail.com"}
+    {name = "CleanCloud", email = "suresh@getcleancloud.com"}
 ]
-keywords = ["aws", "azure", "cloud", "hygiene", "devops", "sre", "infrastructure"]
+keywords = ["aws", "azure", "cloud", "hygiene", "devops", "sre", "infrastructure", "security", "compliance", "enterprise", "ci-cd", "read-only"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: System :: Systems Administration",
     "Topic :: Utilities",
+    "Topic :: Software Development :: Quality Assurance",
+    "Environment :: Console",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -63,6 +69,9 @@ Homepage = "https://github.com/cleancloud-io/cleancloud"
 Documentation = "https://github.com/cleancloud-io/cleancloud#readme"
 Repository = "https://github.com/cleancloud-io/cleancloud"
 Issues = "https://github.com/cleancloud-io/cleancloud/issues"
+Discussions = "https://github.com/cleancloud-io/cleancloud/discussions"
+"Source Code" = "https://github.com/cleancloud-io/cleancloud"
+Changelog = "https://github.com/cleancloud-io/cleancloud/releases"
 
 [project.scripts]
 cleancloud = "cleancloud.cli:main"
