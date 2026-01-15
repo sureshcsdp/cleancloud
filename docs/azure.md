@@ -10,7 +10,7 @@ Azure authentication, RBAC permissions, and configuration guide.
 
 ## Authentication Methods
 
-CleanCloud supports two Azure authentication methods:
+CleanCloud supports three Azure authentication methods:
 
 ### 1. Azure OIDC with Workload Identity (Recommended for CI/CD)
 
@@ -86,7 +86,43 @@ jobs:
 
 ---
 
-### 2. Azure CLI (Local Development)
+### 2. Service Principal with Environment Variables (Local Development)
+
+**Quick setup for local testing and evaluation.**
+
+**Step 1: Create Service Principal**
+```bash
+az ad sp create-for-rbac --name "CleanCloudLocal" --role "Reader" \
+  --scopes /subscriptions/<SUBSCRIPTION_ID>
+```
+
+This outputs:
+```json
+{
+  "appId": "12345678-1234-1234-1234-123456789abc",
+  "displayName": "CleanCloudLocal",
+  "password": "your-client-secret",
+  "tenant": "87654321-4321-4321-4321-987654321dcb"
+}
+```
+
+**Step 2: Set Environment Variables**
+```bash
+export AZURE_CLIENT_ID="12345678-1234-1234-1234-123456789abc"
+export AZURE_TENANT_ID="87654321-4321-4321-4321-987654321dcb"
+export AZURE_CLIENT_SECRET="your-client-secret"
+export AZURE_SUBSCRIPTION_ID="<SUBSCRIPTION_ID>"
+
+cleancloud scan --provider azure
+```
+
+⚠️ **Not recommended for CI/CD** - Use OIDC (Method 1) instead to avoid storing secrets.
+
+---
+
+### 3. Azure CLI (Local Development)
+
+**Recommended for interactive local development.**
 
 ```bash
 # Login
@@ -242,8 +278,8 @@ cleancloud doctor --provider azure
 
 **What it checks:**
 - ✅ Azure credentials are valid
-- ✅ Authentication method (OIDC, CLI)
-- ✅ Security grade
+- ✅ Authentication method (OIDC, service principal, Azure CLI)
+- ✅ Security grade (EXCELLENT/GOOD/ACCEPTABLE)
 - ✅ Required permissions are present
 - ✅ Accessible subscriptions
 
@@ -262,7 +298,16 @@ secrets:
   AZURE_SUBSCRIPTION_ID
 ```
 
-**For local CLI:**
+**For Service Principal (local with env vars):**
+```bash
+# Ensure all four variables are set:
+export AZURE_CLIENT_ID="..."
+export AZURE_TENANT_ID="..."
+export AZURE_CLIENT_SECRET="..."
+export AZURE_SUBSCRIPTION_ID="..."
+```
+
+**For Azure CLI:**
 ```bash
 # Verify you're logged in
 az account show
@@ -277,7 +322,22 @@ az account show
    ```
 2. Ensure `subject` is: `repo:<YOUR_ORG>/<YOUR_REPO>:ref:refs/heads/main`
 
-**For CLI:**
+**For Service Principal:**
+```bash
+# Verify environment variables are set correctly
+echo $AZURE_CLIENT_ID
+echo $AZURE_TENANT_ID
+echo $AZURE_SUBSCRIPTION_ID
+# Don't echo AZURE_CLIENT_SECRET (security)
+
+# Test authentication manually
+az login --service-principal \
+  -u $AZURE_CLIENT_ID \
+  -p $AZURE_CLIENT_SECRET \
+  --tenant $AZURE_TENANT_ID
+```
+
+**For Azure CLI:**
 ```bash
 # Re-login
 az login
@@ -325,7 +385,8 @@ az role assignment list \
 | **Permissions** | IAM policies | RBAC roles |
 | **Regions** | Must specify explicitly | All locations scanned by default |
 | **Resource Scope** | Per-region | Per-subscription |
-| **Authentication** | OIDC or access keys | OIDC or client secrets |
+| **Auth Methods** | OIDC, AWS CLI, env vars | OIDC, Azure CLI, service principal |
+| **Local Development** | Environment variables | Service principal or Azure CLI |
 
 ---
 

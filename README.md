@@ -1,19 +1,79 @@
 # CleanCloud
 
-**A trust-first cloud hygiene engine for production environments.
-CleanCloud provides conservative, read-only hygiene signals for AWS and Azure that are safe to run in production and CI pipelines.**
-
-CleanCloud helps SRE and platform teams safely identify **review-only candidates**
-for orphaned, untagged, or inactive cloud resources — **without deleting anything,
-changing tags, or optimizing costs.**
-
-> ⚠️ CleanCloud never modifies cloud resources.  
-> ⚠️ No auto-cleanup. No cost optimization. No telemetry.
+**Trust-first cloud hygiene engine for production environments**
 
 ![PyPI](https://img.shields.io/pypi/v/cleancloud)
 ![Python Versions](https://img.shields.io/pypi/pyversions/cleancloud)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![GitHub stars](https://img.shields.io/github/stars/cleancloud-io/cleancloud?style=social)
+
+CleanCloud provides **read-only, confidence-scored hygiene signals** for AWS and Azure that are safe to run in production and CI/CD pipelines. Designed for SRE and platform teams to safely identify review candidates for orphaned, untagged, or inactive cloud resources — without mutations, deletions, or optimization recommendations.
+
+* ⚠️ **Read-only by design** - No deletions, no tag modifications, no resource changes
+* ⚠️ **Policy-safe** - Conservative signals with explicit confidence levels
+* ⚠️ **Privacy-first** - Zero telemetry, no phone-home, no data collection
+---
+
+## Table of Contents
+
+- [Security & Trust](#security--trust)
+- [Who This Is For](#who-cleancloud-is-and-is-not-for)
+- [Enterprise & Production Use](#built-for-production--enterprise-use)
+- [Quick Start](#quick-start)
+- [What CleanCloud Detects](#what-cleancloud-detects)
+- [Policy Enforcement](#policy-enforcement)
+- [Configuration](#configuration)
+- [Why Teams Choose CleanCloud](#why-teams-choose-cleancloud)
+- [Design Philosophy](#design-philosophy)
+- [Documentation](#documentation)
+
+---
+
+## Security & Trust
+
+CleanCloud is designed for enterprise environments where security review and approval are required.
+
+### Read-Only by Design
+
+**No destructive permissions required:**
+- ✅ Only `List*`, `Describe*`, `Get*` operations
+- ❌ No `Delete*`, `Modify*`, or `Tag*` permissions
+- ❌ No resource mutations or state changes
+- ✅ Safe for production accounts and regulated environments
+
+**IAM Proof Pack:** [Ready-to-use policies and verification scripts](security/) with automated safety tests
+
+### OIDC-First Authentication
+
+**No long-lived credentials:**
+- ✅ AWS IAM Roles with GitHub Actions OIDC (recommended)
+- ✅ Azure Workload Identity Federation (recommended)
+- ✅ Short-lived tokens only
+- ❌ No stored credentials in CI/CD
+
+### Privacy Guarantees
+
+**Zero telemetry, zero outbound calls:**
+- ❌ No analytics or usage tracking
+- ❌ No phone-home or update checks
+- ❌ No data collection of any kind
+- ✅ Only AWS/Azure API calls (read-only)
+
+### Safety Regression Tests
+
+**Multi-layer verification:**
+- 🧪 Static AST analysis blocks forbidden SDK calls
+- 🧪 Runtime SDK guards prevent mutations in tests
+- 🧪 IAM policy validation ensures read-only access
+- ✅ Runs automatically in CI for all PRs
+
+**For InfoSec Teams:**
+- 📋 [Information Security Readiness Guide](docs/infosec-readiness.md)
+- 🔐 [IAM Proof Pack Documentation](docs/infosec-readiness.md#iam-proof-pack)
+- 🛡️ [Threat Model & Mitigations](docs/infosec-readiness.md#threat-model)
+- ✅ [Safety Test Documentation](docs/safety.md)
+
+---
 
 ## Who CleanCloud Is (and Is Not) For
 
@@ -33,167 +93,23 @@ CleanCloud exists to answer one question safely:
 
 > CleanCloud exists to help SRE and platform teams reduce unknown state in cloud environments — safely and without mutations.
 
-## Why CleanCloud?
-
-CleanCloud uses multiple conservative signals and assigns explicit confidence levels (LOW / MEDIUM / HIGH) to every finding, so teams can enforce policy without false positives.
-
-Modern cloud environments continuously create and destroy resources.
-Over time, **storage and logs lose ownership**, and deleting them becomes risky.
-
-Most tools do one of two things:
-1. **Auto-delete** → unsafe
-2. **Flag everything** → noisy
-
-**CleanCloud takes a third approach:**
-
-- Multiple conservative signals
-- Explicit confidence levels (LOW / MEDIUM / HIGH)
-- Review-only findings
-- Zero mutations
-
-This makes it safe to run in **production accounts and CI pipelines**.
-
----
-
-### What makes CleanCloud different
-
-| CleanCloud | Typical tools |
-|----------|---------------|
-| Read-only, review-only | Auto-delete or mutate |
-| Explicit confidence levels | Binary flags |
-| Conservative signal design | Noisy heuristics |
-| Safe for CI and prod | Often blocked by security |
-| No telemetry | Hidden data collection |
-
----
-
-## Why Not Just Use the Cloud Portal?
-
-Cloud portals (AWS, Azure, GCP) are excellent for **visibility**.  
-CleanCloud exists for **evaluation and automation**.
-
-### Portals show state. CleanCloud applies judgement.
-
-Portals answer:
-- “What resources exist right now?”
-- “Which ones are untagged or unattached?”
-
-CleanCloud answers:
-- “Is this a hygiene risk worth caring about?”
-- “How confident are we in that assessment?”
-- “Is this safe to act on automatically?”
-
----
-
-### Key Differences
-
-| Cloud Portal | CleanCloud |
-|-------------|-----------|
-| Inventory & dashboards | Hygiene evaluation engine |
-| Binary states (yes/no) | Confidence-scored findings |
-| Manual inspection | Automation & CI/CD-ready |
-| Provider-specific | Consistent across clouds |
-| UI-driven & changeable | Deterministic, versioned output |
-
----
-
-### Automation vs Manual Review
-
-Portals require:
-- Clicking through UIs
-- Human judgement
-- Ad-hoc decisions
-- No reproducibility
-
-CleanCloud provides:
-- CLI-first, scriptable checks
-- Deterministic output
-- Explainable reasoning
-- Stable behaviour over time
-
-This makes CleanCloud suitable for:
-- CI/CD pipelines
-- Pre-deployment hygiene checks
-- Periodic governance reviews
-- Audits and reporting
-
----
-
-### Evaluation, Not Just Information
-
-Portals show **raw facts**:
-- “This disk is unattached”
-- “This resource has no tags”
-
-CleanCloud evaluates **risk and intent**:
-- Age and lifecycle context
-- Resource relationships
-- Safety-biased rules
-- Likelihood of false positives
-
-Every finding includes a **confidence level**, so teams know what is safe to act on and what requires review.
-
----
-
-### Designed to Complement the Portal
-
-CleanCloud does not replace the cloud portal.
-
-- Use the **portal** to explore and investigate
-- Use **CleanCloud** to evaluate, automate, and standardise hygiene
-
-> **The portal shows you what exists.  
-> CleanCloud tells you what matters.**
-
----
-
-### Built for Trust
-- Read-only by design
-- No deletion, tagging, or mutation
-- No telemetry or outbound calls
-- Safe for cautious and regulated environments
-
----
-
-## Where CleanCloud Fits
-
-CleanCloud is designed to generate trusted hygiene signals that can be consumed by humans, CI pipelines, or higher-level security and observability platforms.
-
-It sits between:
-- native cloud provider checks (e.g. AWS Config, Trusted Advisor)
-- and automated cleanup / mutation tools
-
-For a visual overview of this positioning, see:
-→ [Where CleanCloud Fits (design diagram)](docs/design.md#where-cleancloud-fits)
 
 ## Built for Production & Enterprise Use
+
 CleanCloud is designed to be approved by security teams, not bypassed.
 
-- ✅ **Read-only by design** (no Delete*, Modify*, or Tag* permissions)
-- ✅ **OIDC-first authentication** (AWS & Azure)
-- ✅ **Parallel, multi-region scanning**
-- ✅ **CI/CD friendly** (exit codes, JSON/CSV output)
-- ✅ **Audit-friendly** (deterministic output, no side effects)
+### Enterprise Features
+- ✅ **Read-only by design** - No Delete*, Modify*, or Tag* permissions required
+- ✅ **OIDC-first authentication** - AWS IAM Roles & Azure Workload Identity
+- ✅ **Parallel, multi-region scanning** - Fast execution across all regions
+- ✅ **CI/CD native** - Stable exit codes, JSON/CSV output, policy enforcement
+- ✅ **Audit-friendly** - Deterministic output, no side effects, versioned schemas
 
-**Security model:**
-- 🔒 No credentials stored
-- 🔐 Short-lived tokens only
-- 🧪 Safety regression tests prevent write APIs
-- 🌐 Zero outbound calls (except AWS/Azure APIs)
-
-→ **For InfoSec teams:** [Information Security Readiness Guide](docs/infosec-readiness.md)
-→ **IAM Proof Pack:** [Ready-to-use policies and verification scripts](security/) | [Documentation](docs/infosec-readiness.md#iam-proof-pack)
-→ **Threat Model:** [Comprehensive threat analysis and mitigations](docs/infosec-readiness.md#threat-model)
-
-## CI/CD at a Glance
-
-CleanCloud is designed for policy enforcement without side effects.
-
-```bash
-# Fail only on high-confidence hygiene risks
-cleancloud scan --provider aws --region us-east-1 --fail-on-confidence HIGH
-```
-Exit codes are stable and intentional:
+### Stability Guarantees
+- 🔒 **CLI backward compatibility** within major versions
+- 🔒 **Exit codes are stable and intentional** - Never fails builds by accident
+- 🔒 **JSON schemas are versioned** - Safe to parse programmatically
+- 🔒 **Read-only always** - Safety regression tests in CI
 
 ### Exit Codes
 
@@ -204,25 +120,53 @@ Exit codes are stable and intentional:
 | `2` | Policy violation (findings detected with `--fail-on-findings` or `--fail-on-confidence`) |
 | `3` | Missing permissions or invalid credentials |
 
-**Note:** Invalid region names (AWS) or location names (Azure) trigger exit code `1` immediately, before attempting API calls.
-
-CleanCloud never fails a build by accident.
-
-### Stability guarantees
-
-- CLI flags are backward-compatible within a major version
-- Exit codes are stable and intentional
-- JSON output schemas are versioned and documented
+**Example:** Enforce policy on high-confidence findings only
+```bash
+cleancloud scan --provider aws --region us-east-1 --fail-on-confidence HIGH
+```
 
 ## Quick Start
 
-### Installation
+### Requirements
+
+**Python:** 3.9 or later
+
+**Cloud Access:**
+- **AWS**: AWS CLI configured, or IAM role (for CI/CD), or environment variables
+- **Azure**: Azure CLI authenticated, or Workload Identity (for CI/CD)
+
+---
+
+## Running Locally
+
+Use CleanCloud locally for development, testing, and ad-hoc hygiene reviews.
+
+### 1. Installation
 
 ```bash
 pip install cleancloud
 ```
 
-### Validate Credentials
+### 2. Set Up Credentials
+
+**AWS:**
+```bash
+export AWS_ACCESS_KEY_ID=<your-access-key>
+export AWS_SECRET_ACCESS_KEY=<your-secret-key>
+export AWS_DEFAULT_REGION=us-east-1
+```
+
+**Azure:**
+```bash
+export AZURE_CLIENT_ID=<your-client-id>
+export AZURE_TENANT_ID=<your-tenant-id>
+export AZURE_CLIENT_SECRET=<your-client-secret>
+export AZURE_SUBSCRIPTION_ID=<your-subscription-id>
+```
+
+> **Alternative methods:** AWS CLI profiles and Azure CLI are also supported. See [Configuration](#configuration) for details.
+
+### 3. Validate Credentials
 
 ```bash
 # AWS - validate credentials and permissions
@@ -235,7 +179,7 @@ cleancloud doctor --provider aws --region us-west-2
 cleancloud doctor --provider azure
 ```
 
-### Run a Scan
+### 4. Run a Scan
 
 ```bash
 # AWS - single region
@@ -260,7 +204,7 @@ cleancloud scan --provider azure --region eastus
 cleancloud scan --provider azure --subscription <subscription-id> --region eastus
 ```
 
-### View Results
+### 5. View Results
 
 ```bash
 # Human-readable output (default)
@@ -285,6 +229,87 @@ AWS and Azure have slightly different schema structures:
   - `subscriptions_scanned` contains subscription IDs (e.g., `["29d91ee0-..."]`)
 
 See [`docs/ci.md#json-output-machine-readable`](docs/ci.md#json-output-machine-readable) for complete schema examples.
+
+---
+
+## Running in CI/CD Pipelines
+
+CleanCloud is designed for CI/CD environments with OIDC authentication (no secrets required).
+
+### Requirements for CI/CD
+
+**Python:** 3.9 or later (usually pre-installed in GitHub Actions runners)
+
+**Authentication:**
+- **AWS**: IAM Role with OIDC trust relationship (GitHub Actions recommended)
+- **Azure**: Workload Identity Federation (Microsoft Entra ID recommended)
+
+**Key Differences from Local Usage:**
+- Uses OIDC (OpenID Connect) instead of CLI credentials
+- No long-lived secrets stored in CI
+- Designed for policy enforcement via exit codes (`--fail-on-confidence`)
+
+### Quick Example: GitHub Actions with AWS
+
+```yaml
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  cleancloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/CleanCloudCIReadOnly
+          aws-region: us-east-1
+
+      - name: Run CleanCloud scan
+        run: |
+          pip install cleancloud
+          cleancloud scan \
+            --provider aws \
+            --region us-east-1 \
+            --output json \
+            --output-file scan.json \
+            --fail-on-confidence HIGH
+```
+
+### Quick Example: GitHub Actions with Azure
+
+```yaml
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  cleancloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run CleanCloud scan
+        run: |
+          pip install cleancloud
+          cleancloud scan \
+            --provider azure \
+            --output json \
+            --output-file scan.json \
+            --fail-on-confidence HIGH
+```
+
+**Complete CI/CD documentation:** See [`docs/ci.md`](docs/ci.md) for detailed setup instructions.
 
 ---
 
@@ -339,231 +364,59 @@ cleancloud scan --provider azure --subscription <subscription-id> --fail-on-conf
 
 ---
 
-## CI/CD Examples
-
-CleanCloud is designed for CI/CD pipelines with predictable exit codes and policy enforcement.
-
-#### Recommended: GitHub Actions with AWS OIDC (No Secrets)
-
-CleanCloud supports AWS IAM Roles assumed via **GitHub Actions OpenID Connect (OIDC)**.
-This is the recommended approach for CI/CD usage.
-
-**Benefits:**
-
-* No long-lived AWS credentials
-* No secrets stored in GitHub
-* Short-lived, auditable credentials
-* Read-only by design
-
-**GitHub Actions Example (AWS)**
-
-```yaml
-permissions:
-  id-token: write
-  contents: read
-
-jobs:
-  cleancloud:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/CleanCloudCIReadOnly
-          aws-region: us-east-1
-
-      - name: Run CleanCloud hygiene scan
-        run: |
-          pip install cleancloud
-          cleancloud scan \
-            --provider aws \
-            --region us-east-1 \
-            --output json \
-            --output-file scan.json \
-            --fail-on-confidence HIGH
-
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: cleancloud-results
-          path: scan.json
-
-```
-See [`docs/ci.md`](docs/ci.md) for complete CI/CD integration examples.
-
-
 ## Configuration
 
-### AWS
+### AWS Authentication
 
-CleanCloud supports three AWS authentication methods:
-
-1. GitHub Actions OIDC (recommended for CI/CD)
-2. AWS CLI profiles (local development)
-3. Environment variables
-
-**Local Development (AWS Profile)**
-
+**Local Development:**
 ```bash
-# Using AWS profile
-aws configure --profile <profile-name>
-cleancloud scan --provider aws --profile <profile-name> --region us-east-1
-```
-
-**Environment Variables**
-```
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
+export AWS_ACCESS_KEY_ID=<your-access-key>
+export AWS_SECRET_ACCESS_KEY=<your-secret-key>
 export AWS_DEFAULT_REGION=us-east-1
 
 cleancloud scan --provider aws --region us-east-1
 ```
 
+**CI/CD:**
+- Use GitHub Actions OIDC (see [Running in CI/CD Pipelines](#running-in-cicd-pipelines))
+- Requires IAM role with read-only permissions
 
-**AWS IAM Policy (Minimum Read-Only Permissions)**
-
-Attach the identity-based IAM policy as shown in [`docs/aws.md`](docs/aws.md)  to the IAM role or user used by CleanCloud
-(**including GitHub Actions OIDC roles**):
-
-
-**Characteristics:**
-
-* No Delete*, Create*, or Tag* permissions
-* Safe for production accounts
-* Compatible with security-reviewed pipelines
-
-See [`docs/aws.md`](docs/aws.md) for:
-
-* OIDC provider setup
-* IAM role trust policies
-* Permission troubleshooting
-
-## Azure
-
-CleanCloud supports **Azure Workload Identity Federation (OIDC)** as the
-**default and recommended authentication method**.
-
-This enables **secretless authentication** using GitHub Actions, with short-lived,
-auditable credentials and no stored client secrets.
+**IAM Permissions:**
+- Only `List*`, `Describe*`, `Get*` operations required
+- No `Delete*`, `Modify*`, or `Tag*` permissions
+- Full policy and alternative auth methods: [`docs/aws.md`](docs/aws.md)
 
 ---
 
-### GitHub Actions with Azure OIDC (Recommended)
+### Azure Authentication
 
-CleanCloud integrates with **Microsoft Entra ID Workload Identity Federation**
-to authenticate securely in CI/CD pipelines.
-
-**Benefits:**
-
-- No `AZURE_CLIENT_SECRET`
-- No long-lived credentials
-- Short-lived, auditable tokens
-- Enterprise-approved security model
-- Consistent with AWS OIDC usage
-
----
-
-#### GitHub Actions Example (Azure OIDC)
-
-```yaml
-permissions:
-  id-token: write
-  contents: read
-
-jobs:
-  cleancloud:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Azure Login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Run CleanCloud hygiene scan
-        run: |
-          pip install cleancloud
-          cleancloud scan \
-            --provider azure \
-            --output json \
-            --output-file scan.json \
-            --fail-on-confidence HIGH
-          # Note: Scans all accessible subscriptions by default
-          # Use --subscription <id> to scan specific subscription(s)
-          # Use --region <location> to filter by Azure location (e.g., eastus)
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cleancloud-results
-          path: scan.json
-```
-
-
-**Local Development (Azure CLI)**
-
-For local runs, CleanCloud uses the active Azure CLI session:
-
+**Local Development:**
 ```bash
-az login
+export AZURE_CLIENT_ID=<your-client-id>
+export AZURE_TENANT_ID=<your-tenant-id>
+export AZURE_CLIENT_SECRET=<your-client-secret>
+export AZURE_SUBSCRIPTION_ID=<your-subscription-id>
 
-# Scan all accessible subscriptions (default)
 cleancloud scan --provider azure
-
-# Scan specific subscription
-cleancloud scan --provider azure --subscription <subscription-id>
-
-# Scan multiple subscriptions
-cleancloud scan --provider azure \
-  --subscription <sub-id-1> \
-  --subscription <sub-id-2>
 ```
 
-**Azure Permissions**
+**CI/CD:**
+- Use Azure Workload Identity Federation (see [Running in CI/CD Pipelines](#running-in-cicd-pipelines))
+- Requires `Reader` role at subscription scope
 
-CleanCloud requires **read-only access only**.
+**Permissions:**
+- Only read-only access required
+- No write, delete, or tag permissions
+- Full setup guide and alternative auth methods: [`docs/azure.md`](docs/azure.md)
 
-**Minimum role required:**
-
-* Reader role at subscription scope
-
-No write, delete, or tag permissions are required.
-
-See [`docs/azure.md`](docs/azure.md) for:
-* App registration setup
-* Federated identity credential configuration
-* Multiple environment support
-* Permission troubleshooting
-
-**Azure Subscription Selection**
-
-By default, CleanCloud scans all accessible subscriptions. You can filter to specific subscriptions:
-
+**Subscription Filtering:**
 ```bash
 # Default: scan all accessible subscriptions
 cleancloud scan --provider azure
 
-# Scan specific subscription
-cleancloud scan --provider azure --subscription <sub-id>
-
-# Scan multiple subscriptions
-cleancloud scan --provider azure \
-  --subscription <sub-id-1> \
-  --subscription <sub-id-2>
+# Scan specific subscriptions
+cleancloud scan --provider azure --subscription <sub-id-1> --subscription <sub-id-2>
 ```
-
-**When to use subscription filtering:**
-- **Enterprise scale**: Organizations with 50+ subscriptions
-- **Team ownership**: Scan only subscriptions your team owns
-- **CI/CD pipelines**: Different pipelines for different subscriptions
-- **Testing**: Test on dev subscriptions before running on production
-- **Performance**: Faster scans when targeting specific subscriptions
 
 ---
 
@@ -655,42 +508,31 @@ It is **not intended** for per-resource exceptions or lifecycle management.
 
 ---
 
-## Safety & Read-Only Guarantees
+## Why Teams Choose CleanCloud
 
-CleanCloud implements **multi-layer safety regression tests** to ensure no cloud resources are ever modified during scans:
+### Automation Over Manual Reviews
 
-- **Static AST checks**: Detect forbidden SDK calls in AWS/Azure provider code.
-- **Runtime SDK guards**: Intercept forbidden SDK calls during tests.
-- **IAM/Role definition checks**: Ensure AWS IAM policies and Azure RBAC roles are read-only.
+**Cloud portals** provide visibility into resource state - what exists, what's untagged, what's unattached.
 
-These tests run automatically in CI and are required for all PRs.
+**CleanCloud** provides **evaluation and automation** - applying judgement, confidence scoring, and enabling policy enforcement in CI/CD pipelines.
 
-For full details, see [docs/safety.md](docs/safety.md).
+| Need | Cloud Portal | CleanCloud |
+|------|--------------|------------|
+| **Inventory & dashboards** | ✅ Excellent | ➖ Not a goal |
+| **Hygiene evaluation** | ❌ Manual only | ✅ Automated |
+| **CI/CD integration** | ❌ Not designed for it | ✅ Purpose-built |
+| **Confidence scoring** | ❌ Binary yes/no | ✅ LOW/MEDIUM/HIGH |
+| **Deterministic output** | ❌ UI-driven | ✅ Versioned schemas |
 
----
+### CleanCloud Complements Your Cloud Portal
 
-## Privacy & Telemetry
+- Use **cloud portals** to explore and investigate resources
+- Use **CleanCloud** to evaluate hygiene risks, automate checks, and enforce policy
 
-**CleanCloud collects zero telemetry.**
+> **The portal shows you what exists.**
+> **CleanCloud tells you what matters.**
 
-- No analytics
-- No usage tracking
-- No phone-home
-- No opt-out flags
-
-This is intentional.
-
-Security tools should not transmit metadata from production environments.
-
-## How we improve:
-- GitHub issues and discussions
-- Direct user feedback
-- Community contributions
-
-If CleanCloud helped you:
-- ⭐ [Star the repo](https://github.com/cleancloud-io/cleancloud)
-- 💬 Share feedback in [discussions](https://github.com/cleancloud-io/cleancloud/discussions)
-- 🐛 [Report issues](https://github.com/cleancloud-io/cleancloud/issues)
+**Learn more:** [Where CleanCloud Fits (design diagram)](docs/design.md#where-cleancloud-fits)
 
 ---
 
@@ -698,28 +540,13 @@ If CleanCloud helped you:
 
 CleanCloud is built on three core principles:
 
-### 1. Conservative by Default
-- Explicit, documented confidence logic ([docs/confidence.md](docs/confidence.md))
-- Age-based confidence thresholds (e.g., disks > 14 days = HIGH confidence)
-- Multiple signals required before flagging resources
-- Explicit confidence levels: LOW, MEDIUM, HIGH
+**1. Conservative by Default** - Multiple signals with explicit confidence levels (LOW/MEDIUM/HIGH) reduce false positives
 
-### 2. Read-Only Always
-- No `Delete*` permissions required
-- No `Tag*` permissions required
-- No modification APIs called
-- Safe for production accounts
+**2. Read-Only Always** - No Delete*, Tag*, or Modify* permissions; safe for production
 
-### 3. Review-Only Recommendations
-- Findings are candidates for human review, not automated action
-- Clear reasoning provided for each finding
-- Detailed metadata included for investigation
+**3. Review-Only Recommendations** - Findings are candidates for review, not automated action
 
-This makes CleanCloud safe for:
-- ✅ Regulated environments
-- ✅ Production accounts
-- ✅ Security-reviewed pipelines
-- ✅ Shared infrastructure
+**Learn more:** [Confidence logic documentation](docs/confidence.md)
 
 ---
 
@@ -762,7 +589,7 @@ We'd love to hear from you:
 
 - 🐛 **Found a bug?** [Open an issue](https://github.com/cleancloud-io/cleancloud/issues)
 - 💡 **Have a feature request?** [Start a discussion](https://github.com/cleancloud-io/cleancloud/discussions)
-- 📧 **Want to chat?** Email us at suresh@sure360.io
+- 📧 **Want to chat?** Email us at suresh@getcleancloud.com
 - 🌟 **Like CleanCloud?** [Star us on GitHub](https://github.com/cleancloud-io/cleancloud)
 
 **Using CleanCloud in production?** We'd love to feature your story!
@@ -776,16 +603,6 @@ Contributions are welcome! Please ensure all PRs:
 - Include documentation updates
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
-
----
-
-## Security
-
-CleanCloud never requires you to commit cloud credentials.
-All scans run using standard AWS/Azure SDK credential resolution
-(AWS profiles, env vars, or workload identity).
-
-⚠️ Never commit secrets into this repository.
 
 ---
 

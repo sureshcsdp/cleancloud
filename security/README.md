@@ -128,5 +128,5 @@ See [`docs/safety.md`](../docs/safety.md) for details on automated safety testin
 
 **Questions?**
 
-Email: suresh@sure360.io
+Email: suresh@getcleancloud.com
 GitHub Issues: https://github.com/cleancloud-io/cleancloud/issues

@@ -243,7 +243,7 @@ The zero outbound calls guarantee is critical for:
 5. This guarantee is enforceable through code review, network monitoring, and our open-source license
 
 **If you discover any violation of this guarantee:**
-- Report immediately to: suresh@sure360.io with subject `[SECURITY] Outbound Call Violation`
+- Report immediately to: suresh@getcleancloud.com with subject `[SECURITY] Outbound Call Violation`
 - We will issue a security advisory and patched release within 48 hours
 - The violating code will be removed and root cause published
 
@@ -861,7 +861,7 @@ tcpdump -r cleancloud-traffic.pcap -n | awk '{print $3}' | sort | uniq
 
 **Response (If Detected):**
 1. Immediately stop all CleanCloud usage
-2. Report to CleanCloud maintainers: suresh@sure360.io
+2. Report to CleanCloud maintainers: suresh@getcleancloud.com
 3. Report to PyPI security team
 4. Review previous scan outputs for compromised data
 5. Rotate cloud credentials as precaution
@@ -1515,7 +1515,7 @@ InfoSec teams can perform penetration testing on CleanCloud:
 **Responsible Disclosure:**
 
 If you discover a security vulnerability, please report it to:
-- Email: suresh@sure360.io
+- Email: suresh@getcleancloud.com
 - Subject: `[SECURITY] CleanCloud Vulnerability Report`
 
 We will acknowledge within 48 hours and provide a resolution timeline.
@@ -1740,7 +1740,7 @@ A: Unlikely. CleanCloud:
 If throttling occurs, AWS/Azure will return rate limit errors (no resource impact).
 
 **Q: How do I report a security vulnerability?**
-A: Email: suresh@sure360.io with subject `[SECURITY] CleanCloud Vulnerability Report`
+A: Email: suresh@getcleancloud.com with subject `[SECURITY] CleanCloud Vulnerability Report`
 
 We follow responsible disclosure practices:
 - Acknowledge within 48 hours
@@ -1769,7 +1769,7 @@ For information security teams evaluating CleanCloud, we recommend:
 - Gradually expand to production after validation period
 
 **Questions?**
-Email: suresh@sure360.io
+Email: suresh@getcleancloud.com
 GitHub Issues: https://github.com/cleancloud-io/cleancloud/issues
 Documentation: https://github.com/cleancloud-io/cleancloud/tree/main/docs
 
