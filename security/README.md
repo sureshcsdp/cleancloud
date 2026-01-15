@@ -1,6 +1,14 @@
 # CleanCloud IAM Proof Pack
 
-This directory contains the **IAM Proof Pack** - a collection of artifacts for security teams to verify CleanCloud's read-only security model.
+**Ready-to-use IAM policies and verification scripts for enterprise security teams**
+
+This directory contains the **IAM Proof Pack** - a collection of artifacts that enable InfoSec teams to independently verify CleanCloud's read-only security model without requiring deep cloud expertise.
+
+**Use this for:**
+- Security approval workflows
+- Compliance audits (SOC2, ISO 27001)
+- Penetration testing preparation
+- Risk assessment documentation
 
 ## Contents
 
@@ -94,12 +102,39 @@ az role assignment create \
 
 ## For Security Reviews
 
-This IAM Proof Pack can be provided to security teams for:
+### Enterprise Approval Workflows
 
-- **Policy review** - Verify no write/delete/tag permissions
-- **Compliance audits** - Evidence of least privilege principle
-- **Penetration testing** - Test that CleanCloud cannot mutate resources
-- **Risk assessment** - Demonstrate limited blast radius
+This IAM Proof Pack accelerates security approval by providing:
+
+**For InfoSec Teams:**
+- ✅ **Policy review** - Programmatic verification of read-only permissions
+- ✅ **Compliance audits** - Evidence of least privilege principle
+- ✅ **Penetration testing** - Proof that CleanCloud cannot mutate resources
+- ✅ **Risk assessment** - Demonstrate limited blast radius
+
+**For Compliance Teams:**
+- 📋 Pre-verified policies ready for SOC2/ISO 27001 reviews
+- 📋 Automated verification scripts (auditable, repeatable)
+- 📋 Links to comprehensive threat model and security documentation
+
+**Time to approval:** Many enterprises approve CleanCloud in 1-2 weeks using this proof pack.
+
+---
+
+## Quick Verification Checklist
+
+Use this checklist during security review:
+
+- [ ] Run `./verify-aws-policy.sh` - Confirms no write/delete/tag permissions
+- [ ] Run `./verify-azure-role.sh Reader` - Confirms Azure role is read-only
+- [ ] Review [Information Security Readiness Guide](../docs/infosec-readiness.md)
+- [ ] Review [Threat Model](../docs/infosec-readiness.md#threat-model)
+- [ ] Check [Safety Tests](../docs/safety.md) - Multi-layer mutation prevention
+- [ ] Test in non-production environment first
+- [ ] Monitor CloudTrail/Azure Activity Log during test scan
+- [ ] Verify zero outbound calls (except cloud provider APIs)
+
+**Expected review time:** 2-4 hours for initial assessment
 
 ---
 
@@ -119,14 +154,26 @@ See [`docs/safety.md`](../docs/safety.md) for details on automated safety testin
 
 ## Additional Resources
 
-- [Information Security Readiness Guide](../docs/infosec-readiness.md) - Comprehensive security documentation
-- [AWS Setup Guide](../docs/aws.md) - AWS authentication and IAM setup
-- [Azure Setup Guide](../docs/azure.md) - Azure authentication and RBAC setup
-- [Safety Documentation](../docs/safety.md) - Multi-layer safety regression tests
+**For InfoSec Teams:**
+- 🔐 [Information Security Readiness Guide](../docs/infosec-readiness.md) - Comprehensive security assessment
+- 🛡️ [Threat Model & Mitigations](../docs/infosec-readiness.md#threat-model) - Detailed threat analysis
+- 🧪 [Safety Testing Documentation](../docs/safety.md) - Multi-layer safety regression tests
+
+**For Implementation:**
+- ⚙️ [AWS Setup Guide](../docs/aws.md) - Authentication methods and IAM policies
+- ⚙️ [Azure Setup Guide](../docs/azure.md) - Authentication methods and RBAC roles
+- 🚀 [CI/CD Integration Guide](../docs/ci.md) - GitHub Actions and Azure DevOps examples
+
+**Main Documentation:**
+- 📖 [README](../README.md) - Quick start and overview
 
 ---
 
-**Questions?**
+## Support
 
-Email: suresh@getcleancloud.com
-GitHub Issues: https://github.com/cleancloud-io/cleancloud/issues
+**For security-related questions:**
+- 📧 Email: suresh@getcleancloud.com
+- 🐛 GitHub Issues: https://github.com/cleancloud-io/cleancloud/issues
+- 💬 Discussions: https://github.com/cleancloud-io/cleancloud/discussions
+
+**Enterprise customers:** We're happy to join security review calls or provide additional documentation.
