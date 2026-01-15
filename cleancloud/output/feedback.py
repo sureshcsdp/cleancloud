@@ -25,5 +25,5 @@ def show_feedback_prompt():
     click.echo()
     click.echo("Report any issues: https://github.com/cleancloud-io/cleancloud/issues")
     click.echo()
-    click.echo("Or email: suresh@sure360.io")
+    click.echo("Or email: suresh@getcleancloud.com")
     click.echo()
