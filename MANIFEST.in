@@ -1,0 +1,18 @@
+# Include documentation files
+include README.md
+include LICENSE
+include CONTRIBUTING.md
+
+# Include security and IAM policy files
+recursive-include security *.md *.json *.sh
+
+# Include documentation
+recursive-include docs *.md
+
+# Include example configuration
+include cleancloud/cleancloud.yaml
+
+# Exclude test files and caches
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
