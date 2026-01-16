@@ -11,7 +11,7 @@
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)
-2. [Zero Outbound Calls Guarantee](#zero-outbound-calls-guarantee)
+2. [Zero Outbound Calls Assurance](#zero-outbound-calls-assurance-design--enforcement)
 3. [IAM Proof Pack](#iam-proof-pack)
 4. [Security Model & Architecture](#security-model--architecture)
 5. [Threat Model](#threat-model)
@@ -55,7 +55,7 @@ CleanCloud is an **open-source, read-only cloud hygiene scanning tool** designed
 
 ---
 
-## Zero Outbound Calls Guarantee
+## Zero Outbound Calls Assurance (Design & Enforcement)
 
 ### Network Trust Model
 
@@ -76,7 +76,7 @@ This is a critical security guarantee for enterprise environments:
 
 ### Verification Methods
 
-InfoSec teams can verify the zero outbound calls guarantee through multiple methods:
+InfoSec teams can verify the zero outbound calls assurance through multiple methods:
 
 #### 1. Network Monitoring (Runtime Verification)
 
@@ -224,7 +224,7 @@ cat pyproject.toml | grep dependencies
 
 ### Why This Matters
 
-The zero outbound calls guarantee is critical for:
+The zero outbound calls assurance is critical for:
 
 - **Air-gapped environments**: Can run CleanCloud with only AWS/Azure API access
 - **Compliance**: No data exfiltration risk (PCI-DSS, HIPAA, FedRAMP)
@@ -234,17 +234,17 @@ The zero outbound calls guarantee is critical for:
 
 ### Written Guarantee
 
-**We, the CleanCloud maintainers, guarantee that:**
+**The CleanCloud project is designed and continuously validated to ensure that:**
 
 1. CleanCloud makes zero outbound calls except to AWS/Azure APIs
 2. CleanCloud contains zero telemetry, analytics, or tracking code
 3. CleanCloud does not check for updates or phone home
-4. Any violation of this guarantee in a release will be treated as a critical security incident
-5. This guarantee is enforceable through code review, network monitoring, and our open-source license
+4. Any violation of this assurance in a release will be treated as a critical security incident
+5. This assurance is enforceable through code review, network monitoring, and our open-source license
 
-**If you discover any violation of this guarantee:**
+**If you discover any violation of this assurance:**
 - Report immediately to: suresh@getcleancloud.com with subject `[SECURITY] Outbound Call Violation`
-- We will issue a security advisory and patched release within 48 hours
+- We aim to acknowledge reports within 48 hours and publish remediation details as soon as reasonably possible
 - The violating code will be removed and root cause published
 
 ---
@@ -616,7 +616,7 @@ CleanCloud is built on three core security principles:
 - **No credential storage**: Uses native AWS/Azure credential chains
 - **No data transmission**: Scan results remain local or in user-controlled outputs
 - **No telemetry**: Zero analytics, usage tracking, or phone-home
-- **No external dependencies**: Does not call third-party APIs or services
+- **No external network dependencies**: Does not call third-party APIs or services (beyond cloud provider SDKs)
 
 #### 3. Provable Safety
 
@@ -664,7 +664,7 @@ CleanCloud is built on three core security principles:
 **Key Security Characteristics:**
 
 - All processing happens locally in the execution environment
-- No data leaves the user's control
+- No data is transmitted by CleanCloud itself; any downstream handling of outputs is controlled by the user's environment
 - Cloud provider APIs are only queried for read operations
 - Results are written to user-specified locations (stdout, files, artifacts)
 
@@ -691,12 +691,12 @@ CleanCloud's attack surface is intentionally minimal:
     │   └─ Mitigation: OIDC (1-hour tokens), read-only IAM/RBAC
     │
     ├─► Resource Mutation (Accidental Deletion)
-    │   ├─ Likelihood: ❌ None (impossible by design)
+    │   ├─ Likelihood: Extremely Low (prevented by IAM/RBAC enforcement and automated safety controls)
     │   ├─ Impact: Critical (if possible)
     │   └─ Mitigation: No write permissions, safety regression tests
     │
     ├─► Data Exfiltration
-    │   ├─ Likelihood: ❌ None (zero telemetry, local processing)
+    │   ├─ Likelihood: Extremely Low (prevented by design: zero telemetry, local processing only)
     │   ├─ Impact: Medium (cloud metadata exposure)
     │   └─ Mitigation: No outbound calls (except cloud APIs), code review
     │
@@ -781,9 +781,9 @@ az monitor activity-log list \
 
 **Impact:**
 - 🚨 **Critical** (if successful) - production resource deletion
-- ❌ **IMPOSSIBLE in practice** - multiple safety layers prevent this
+- ✅ **Extremely Low in practice** - multiple safety layers prevent this
 
-**Likelihood:** None (impossible by design)
+**Likelihood:** Extremely Low (prevented by multiple enforcement layers)
 
 **Mitigations (Multi-Layer Defense):**
 
@@ -990,7 +990,7 @@ az monitor activity-log list --status "Failed" \
 | Threat | Likelihood | Impact | Risk Level | Priority |
 |--------|-----------|--------|------------|----------|
 | Credential Compromise | Low-Medium | Medium-High | 🟡 Medium | High - Use OIDC |
-| Resource Mutation | None | Critical | ✅ None | N/A - Impossible |
+| Resource Mutation | Extremely Low | Critical | 🟢 Low | Low - Prevented by IAM/RBAC + safety tests |
 | Data Exfiltration | Low | Medium | 🟢 Low | Medium - Verify via network monitoring |
 | Supply Chain Attack | Low | High | 🟡 Medium | Medium - Use `pip-audit` |
 | API Throttling | Low | Low | 🟢 Low | Low - Monitor only |
@@ -1033,20 +1033,28 @@ CleanCloud is NOT appropriate if you require:
 - **Storage**: Only in user-specified output files (JSON, CSV, or stdout)
 - **Transmission**: Zero data transmitted to third parties
 
-### GDPR Compliance
+### GDPR Considerations
 
-CleanCloud does not process personal data and therefore:
+CleanCloud is designed to avoid intentional processing of personal data.
 
-- ✅ No data subject rights required (no personal data collected)
-- ✅ No data processing agreements needed
-- ✅ No cross-border data transfer concerns
-- ✅ No right-to-be-forgotten obligations
+However, cloud resource metadata (e.g., tags, resource names, IAM principals) **may contain identifiers depending on how the customer configures their environment**.
 
-### CCPA Compliance
+- CleanCloud does not transmit or retain such data outside the user's environment
+- All processing occurs locally under the user's control
+- CleanCloud does not act as a data controller or processor
 
-- ✅ No "sale" of personal information
-- ✅ No personal information collection
-- ✅ No opt-out mechanisms required
+GDPR applicability and obligations (e.g., DPIA, DPA requirements) must be assessed by the user based on their specific data usage and organizational policies.
+
+### CCPA Considerations
+
+CleanCloud is designed to avoid collection or sale of personal information.
+
+However, organizations must assess CCPA applicability based on:
+- How resource metadata is configured (e.g., user names in tags)
+- Whether such metadata constitutes personal information under California law
+- The organization's own data handling practices
+
+CleanCloud does not transmit or sell any data collected during scanning operations.
 
 ### Data Classification
 
@@ -1356,9 +1364,9 @@ aws cloudtrail lookup-events \
 
 | Threat | Likelihood | Impact | Mitigation |
 |--------|-----------|--------|-----------|
-| **Accidental Resource Deletion** | ❌ None | Critical | CleanCloud has zero delete permissions; automated tests prevent mutation APIs |
+| **Accidental Resource Deletion** | Extremely Low | Critical | CleanCloud has zero delete permissions; automated tests prevent mutation APIs |
 | **Credential Compromise** | ⚠️ Low-Medium | Medium-High | Use OIDC (short-lived); scope to read-only; monitor CloudTrail |
-| **Data Exfiltration** | ❌ None | Medium | No telemetry; all processing local; outputs user-controlled |
+| **Data Exfiltration** | Extremely Low | Medium | No telemetry; all processing local; outputs user-controlled |
 | **Supply Chain Attack** | ⚠️ Low | Medium | Open-source (auditable); minimal dependencies; PyPI checksums |
 | **Denial of Service (API Throttling)** | ⚠️ Low | Low | CleanCloud respects rate limits; parallel scanning configurable |
 | **False Positive (Incorrect Findings)** | ⚠️ Medium | Low | Conservative detection logic; confidence levels; review-only (no auto-action) |
@@ -1384,16 +1392,18 @@ CleanCloud may NOT be appropriate if you require:
 
 ### Industry Standards
 
-| Standard | Compliance Status | Evidence |
-|----------|------------------|----------|
-| **SOC 2 Type II** | ✅ Compatible | Read-only, no data storage, audit trails |
-| **ISO 27001** | ✅ Compatible | Access control, audit logging, least privilege |
-| **PCI-DSS** | ✅ Compatible | No cardholder data access; read-only permissions |
-| **HIPAA** | ✅ Compatible | No PHI access; local processing; audit trails |
-| **FedRAMP** | ⚠️ Depends | Tool itself compatible; deployment depends on FedRAMP boundary |
-| **NIST 800-53** | ✅ Compatible | AC-6 (Least Privilege), AU-2 (Audit Events), CM-7 (Least Functionality) |
+CleanCloud does not claim certification or formal compliance with the following standards. The table below describes architectural characteristics that may support organizations pursuing these frameworks.
 
-**Note:** CleanCloud does not have third-party compliance certifications (e.g., SOC 2 report). Compliance is achieved through the deployment model (OIDC, read-only, local execution).
+| Standard | Alignment Characteristics | Evidence |
+|----------|--------------------------|----------|
+| **SOC 2 Type II** | Read-only by design, no data storage, audit trails | Local processing; CloudTrail/Activity Log compatibility |
+| **ISO 27001** | Access control, audit logging, least privilege | OIDC authentication; read-only IAM/RBAC |
+| **PCI-DSS** | No cardholder data access; read-only permissions | Does not interact with payment systems |
+| **HIPAA** | No PHI access; local processing; audit trails | Resource metadata only; no health data access |
+| **FedRAMP** | Read-only, OIDC-compatible, audit-friendly | May support ATO process; agency assessment required |
+| **NIST 800-53** | AC-6 (Least Privilege), AU-2 (Audit Events) | Read-only controls; CloudTrail logging |
+
+**Important:** Compliance and certification status must be assessed by the deploying organization. CleanCloud provides architectural characteristics that may support compliance efforts, but does not hold third-party certifications.
 
 ### Control Mapping
 
@@ -1411,16 +1421,18 @@ CleanCloud may NOT be appropriate if you require:
 ### Regulatory Considerations
 
 **GDPR (EU General Data Protection Regulation):**
-- ✅ No personal data processing
-- ✅ No data transfer outside user's control
-- ✅ No data retention (outputs managed by user)
+- CleanCloud avoids intentional processing of personal data
+- All data processing occurs locally under user control
+- GDPR obligations depend on customer's specific usage and environment configuration
 
 **CCPA (California Consumer Privacy Act):**
-- ✅ No personal information collection or sale
+- CleanCloud avoids collection or sale of personal information
+- CCPA applicability must be assessed based on customer's data handling practices
 
 **FISMA (Federal Information Security Management Act):**
-- ✅ Compatible with federal system security requirements
-- ⚠️ May require ATO (Authority to Operate) depending on federal agency policy
+- CleanCloud may be used within federal environments subject to agency risk acceptance and authorization (ATO)
+- The tool itself does not hold FedRAMP authorization
+- Deployment in federal systems requires agency-specific security assessment
 
 ---
 
@@ -1518,7 +1530,7 @@ If you discover a security vulnerability, please report it to:
 - Email: suresh@getcleancloud.com
 - Subject: `[SECURITY] CleanCloud Vulnerability Report`
 
-We will acknowledge within 48 hours and provide a resolution timeline.
+We aim to acknowledge reports within 48 hours and provide a resolution timeline as soon as reasonably possible.
 
 ---
 
@@ -1743,8 +1755,8 @@ If throttling occurs, AWS/Azure will return rate limit errors (no resource impac
 A: Email: suresh@getcleancloud.com with subject `[SECURITY] CleanCloud Vulnerability Report`
 
 We follow responsible disclosure practices:
-- Acknowledge within 48 hours
-- Provide resolution timeline
+- Aim to acknowledge reports within 48 hours
+- Provide resolution timeline as soon as reasonably possible
 - Credit security researchers in release notes (if desired)
 
 ---
