@@ -1,13 +1,13 @@
 # CleanCloud
 
-**Trust-first cloud hygiene engine for production environments**
+**Reduce cloud costs through safe, read-only hygiene evaluation**
 
 ![PyPI](https://img.shields.io/pypi/v/cleancloud)
 ![Python Versions](https://img.shields.io/pypi/pyversions/cleancloud)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![GitHub stars](https://img.shields.io/github/stars/cleancloud-io/cleancloud?style=social)
 
-CleanCloud provides **read-only, confidence-scored hygiene signals** for AWS and Azure that are safe to run in production and CI/CD pipelines. Designed for SRE and platform teams to safely identify review candidates for orphaned, untagged, or inactive cloud resources — without mutations, deletions, or optimization recommendations.
+CleanCloud helps teams **reduce cloud costs** by safely identifying orphaned, untagged, and inactive resources for review. Built as a **read-only, trust-first hygiene evaluation engine** for AWS and Azure — safe to run in production and CI/CD pipelines. Designed for SRE and platform teams who need cost optimization without mutations, deletions, or automated cleanup.
 
 * ⚠️ **Read-only by design** - No deletions, no tag modifications, no resource changes
 * ⚠️ **Policy-safe** - Conservative signals with explicit confidence levels
@@ -78,20 +78,21 @@ CleanCloud is designed for enterprise environments where security review and app
 ## Who CleanCloud Is (and Is Not) For
 
 **CleanCloud is for:**
-- SRE / Platform teams reviewing cloud hygiene safely
-- Security-reviewed and regulated environments
-- CI/CD pipelines that must never mutate infrastructure
-- Teams using IaC and ephemeral resources
+- Teams optimizing cloud costs in production and staging environments
+- SRE / Platform teams who need safe, read-only hygiene evaluation
+- Security-reviewed and regulated environments where mutations are prohibited
+- CI/CD pipelines that enforce cost hygiene without infrastructure changes
+- Organizations using IaC and ephemeral resources
 
 **CleanCloud is NOT:**
-- ❌ A cost optimization or FinOps tool
-- ❌ An automated cleanup or deletion service
+- ❌ An automated cleanup or deletion service (one-click account nuking)
 - ❌ A replacement for Trusted Advisor or Config
-- ❌ A dashboard that flags everything
+- ❌ A cost dashboard with rightsizing recommendations
+- ❌ A tool that modifies, tags, or deletes resources
 
 CleanCloud exists to answer one question safely:
 
-> CleanCloud exists to help SRE and platform teams reduce unknown state in cloud environments — safely and without mutations.
+> What orphaned resources are costing us money — without risking production?
 
 
 ## Built for Production & Enterprise Use
@@ -510,27 +511,28 @@ It is **not intended** for per-resource exceptions or lifecycle management.
 
 ## Why Teams Choose CleanCloud
 
-### Automation Over Manual Reviews
+### Cost Optimization Without Compromising Safety
 
-**Cloud portals** provide visibility into resource state - what exists, what's untagged, what's unattached.
+**Cost dashboards** show you spending trends and rightsizing recommendations.
 
-**CleanCloud** provides **evaluation and automation** - applying judgement, confidence scoring, and enabling policy enforcement in CI/CD pipelines.
+**CleanCloud** helps you **reduce costs** by safely identifying waste — orphaned resources, unattached volumes, and inactive assets — without mutations or automation risk.
 
-| Need | Cloud Portal | CleanCloud |
-|------|--------------|------------|
-| **Inventory & dashboards** | ✅ Excellent | ➖ Not a goal |
-| **Hygiene evaluation** | ❌ Manual only | ✅ Automated |
-| **CI/CD integration** | ❌ Not designed for it | ✅ Purpose-built |
+| Need | Cost Dashboards | CleanCloud |
+|------|-----------------|------------|
+| **Spending trends & analysis** | ✅ Excellent | ➖ Not a goal |
+| **Orphaned resource detection** | ❌ Limited or noisy | ✅ Conservative, high-signal |
+| **Safe for production** | ⚠️ Varies | ✅ Read-only always |
+| **CI/CD cost enforcement** | ❌ Not designed for it | ✅ Purpose-built |
 | **Confidence scoring** | ❌ Binary yes/no | ✅ LOW/MEDIUM/HIGH |
-| **Deterministic output** | ❌ UI-driven | ✅ Versioned schemas |
+| **No mutations required** | ⚠️ Often needs write access | ✅ Read-only by design |
 
-### CleanCloud Complements Your Cloud Portal
+### CleanCloud Complements Your Cost Tools
 
-- Use **cloud portals** to explore and investigate resources
-- Use **CleanCloud** to evaluate hygiene risks, automate checks, and enforce policy
+- Use **cost dashboards** to track spending and identify trends
+- Use **CleanCloud** to find and review orphaned resources that are costing money
 
-> **The portal shows you what exists.**
-> **CleanCloud tells you what matters.**
+> **Cost dashboards show you what you're spending.**
+> **CleanCloud shows you what you can safely stop spending.**
 
 **Learn more:** [Where CleanCloud Fits (design diagram)](docs/design.md#where-cleancloud-fits)
 
@@ -564,11 +566,11 @@ CleanCloud is built on three core principles:
 These are intentional non-goals to preserve safety and trust.
 
 - Automated cleanup or deletion
-- Cost optimization recommendations
-- Rightsizing suggestions
-- Billing data access
+- Rightsizing or instance optimization suggestions
+- Billing data access or spending analysis
+- Resource tagging or mutations
 
-CleanCloud will remain focused on **safe hygiene detection**, not automation or cost management.
+CleanCloud will remain focused on **safe cost optimization through hygiene detection**, not automation or infrastructure changes.
 
 ---
 

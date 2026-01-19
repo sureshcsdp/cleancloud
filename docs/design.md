@@ -1,10 +1,10 @@
 # CleanCloud Design & Positioning
 
-CleanCloud is intentionally positioned **between noisy hygiene alerts and risky automation**.
+CleanCloud is a **cost optimization tool** built for production and staging environments.
 
 It exists to answer one question safely:
 
-> What cloud resources look abandoned enough to review — without risking production?
+> What orphaned resources are costing us money — without risking production?
 
 ---
 
@@ -52,9 +52,9 @@ It exists to answer one question safely:
 ```
 ---
 
-**CleanCloud sits in the "trust zone" between:**
-- Native cloud services (too noisy/shallow for actionable hygiene)
-- Automation tools (too risky for production environments)
+**CleanCloud sits in the "trust zone":**
+- Cost optimization through safe, read-only hygiene detection
+- Unlike native cloud services (too noisy/shallow) or automation tools (too risky for production)
 
 ## Design Principles
 
@@ -78,9 +78,9 @@ and frequently recreated — not manually curated.
 
 ## What CleanCloud Is Not
 
-- Not a cost optimization tool
-- Not an automated cleanup engine
+- Not an automated cleanup engine (one-click account nuking)
+- Not a rightsizing or instance optimization tool
+- Not a spending analysis dashboard
 - Not a replacement for Config, TA, or policies
-- Not a dashboard that flags everything
 
-CleanCloud is a **hygiene intelligence layer** focused on safety and trust.
+CleanCloud is a **cost optimization tool** built on safe, read-only hygiene evaluation.
