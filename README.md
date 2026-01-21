@@ -5,6 +5,7 @@
 ![PyPI](https://img.shields.io/pypi/v/cleancloud)
 ![Python Versions](https://img.shields.io/pypi/pyversions/cleancloud)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+[![Security Scanning](https://github.com/cleancloud-io/cleancloud/actions/workflows/security-scan.yml/badge.svg)](https://github.com/cleancloud-io/cleancloud/actions/workflows/security-scan.yml)
 ![GitHub stars](https://img.shields.io/github/stars/cleancloud-io/cleancloud?style=social)
 
 CleanCloud helps teams **reduce cloud costs** by safely identifying orphaned, untagged, and inactive resources for review. Built as a **read-only, trust-first hygiene evaluation engine** for AWS and Azure — safe to run in production and CI/CD pipelines. Designed for SRE and platform teams who need cost optimization without mutations, deletions, or automated cleanup.
