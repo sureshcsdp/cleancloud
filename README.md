@@ -68,6 +68,7 @@ CleanCloud is designed for enterprise environments where security review and app
 - ✅ Runs automatically in CI for all PRs
 
 **For InfoSec Teams:**
+- 🔒 [Security Policy & Threat Model](SECURITY.md) - **Enterprise security documentation**
 - 📋 [Information Security Readiness Guide](docs/infosec-readiness.md)
 - 🔐 [IAM Proof Pack Documentation](docs/infosec-readiness.md#iam-proof-pack)
 - 🛡️ [Threat Model & Mitigations](docs/infosec-readiness.md#threat-model)
@@ -576,6 +577,7 @@ CleanCloud will remain focused on **safe cost optimization through hygiene detec
 
 ## Documentation
 
+- [`SECURITY.md`](SECURITY.md) - **Security policy and threat model for enterprise evaluation**
 - [`docs/infosec-readiness.md`](docs/infosec-readiness.md) - Information security readiness guide for enterprise teams
 - [`security/`](security/) - IAM Proof Pack (ready-to-use policies and verification scripts)
 - [`docs/rules.md`](docs/rules.md) - Detailed rule behavior and signals
