@@ -106,7 +106,9 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          extra_args: --only-verified --since-commit HEAD~1
+          base: ${{ github.event.before }}
+          head: ${{ github.event.after }}
+          extra_args: --only-verified
 
   license-compliance:
     name: License Compliance Check
