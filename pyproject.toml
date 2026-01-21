@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cleancloud"
 version = "0.6.0"
-description = "Trust-first cloud hygiene engine for production environments. Read-only, confidence-scored hygiene signals for AWS and Azure."
+description = "Reduce cloud costs through safe, read-only hygiene evaluation. Built for production environments with confidence-scored signals for AWS and Azure."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -35,6 +35,9 @@ classifiers = [
 dependencies = [
     "click>=8.0.0",
     "PyYAML>=6.0",
+    "urllib3>=2.6.3",
+    "jaraco-context>=6.1.0",
+    "pyasn1>=0.6.2",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +51,7 @@ azure = [
     "azure-mgmt-resource>=23.0.0",
     "azure-mgmt-compute>=30.0.0",
     "azure-mgmt-network>=25.0.0",
-    "azure-core>=1.29.0",
+    "azure-core>=1.38.0",
 ]
 
 all = [

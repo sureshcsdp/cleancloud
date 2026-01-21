@@ -24,7 +24,7 @@ def detect_azure_auth_method() -> tuple[str, str, dict]:
                 "security_grade": "excellent",
                 "credential_lifetime": "1 hour (temporary)",
                 "rotation_required": False,
-                "uses_secret": False,
+                "uses_secret": False,  # nosec B105 - metadata flag, not a password
             }
         )
 
@@ -43,7 +43,7 @@ def detect_azure_auth_method() -> tuple[str, str, dict]:
                 "credential_lifetime": "long-lived (client secret)",
                 "rotation_required": True,
                 "rotation_interval": "90 days or per policy",
-                "uses_secret": True,
+                "uses_secret": True,  # nosec B105 - metadata flag, not a password
             }
         )
         return "client_secret", "Service Principal (Client Secret)", metadata
@@ -57,7 +57,7 @@ def detect_azure_auth_method() -> tuple[str, str, dict]:
                 "security_grade": "acceptable",
                 "credential_lifetime": "Azure CLI session",
                 "rotation_required": False,
-                "uses_secret": False,
+                "uses_secret": False,  # nosec B105 - metadata flag, not a password
             }
         )
         return "azure_cli", "Azure CLI", metadata
@@ -72,7 +72,7 @@ def detect_azure_auth_method() -> tuple[str, str, dict]:
                 "security_grade": "excellent",
                 "credential_lifetime": "temporary (auto-rotated)",
                 "rotation_required": False,
-                "uses_secret": False,
+                "uses_secret": False,  # nosec B105 - metadata flag, not a password
             }
         )
         return "managed_identity", "Managed Identity", metadata
