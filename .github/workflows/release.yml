@@ -6,7 +6,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write  # Required for posting release updates
 
 jobs:
   # =========================
@@ -80,17 +80,20 @@ jobs:
         with:
           skip-existing: true
 
-      - name: Comment on release
+      - name: Update release with PyPI info
         uses: actions/github-script@v7
         with:
           script: |
             const tag = context.payload.release.tag_name;
             const releaseUrl = context.payload.release.html_url;
             const pypiUrl = `https://pypi.org/project/cleancloud/${tag.replace('v', '')}/`;
-            
-            await github.rest.repos.createCommitComment({
+            const currentBody = context.payload.release.body || '';
+
+            const pypiInfo = `\n\n---\n\n✅ **Published to PyPI**\n\n📦 Install: \`pip install cleancloud==${tag.replace('v', '')}\`\n🔗 PyPI: ${pypiUrl}`;
+
+            await github.rest.repos.updateRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              commit_sha: context.sha,
-              body: `✅ Successfully published **${tag}** to PyPI!\n\n📦 Install: \`pip install cleancloud==${tag.replace('v', '')}\`\n🔗 PyPI: ${pypiUrl}\n🎉 Release: ${releaseUrl}`
+              release_id: context.payload.release.id,
+              body: currentBody + pypiInfo
             });
