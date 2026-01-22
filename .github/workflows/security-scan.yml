@@ -216,12 +216,12 @@ jobs:
             echo "❌ CodeQL analysis FAILED"
             exit 1
           fi
-          
+
           echo "✅ All security scans passed!"
           echo ""
           echo "Scans completed:"
           echo "  ✅ Dependency vulnerabilities (pip-audit)"
           echo "  ✅ Code security (Bandit SAST)"
           echo "  ✅ Secrets detection (TruffleHog)"
-          echo "  ✅ License compliance"
+          echo "  ✅ License compliance (pip-licenses)"
           echo "  ✅ Advanced security analysis (CodeQL)"
