@@ -47,7 +47,9 @@ jobs:
       - name: Run MoJ DevSecOps SCA
         uses: ministryofjustice/devsecops-actions/sca@v1.3.0
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          RENOVATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compliance Summary
         if: always()
