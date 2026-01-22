@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - name: Run MoJ DevSecOps SCA
-        uses: ministryofjustice/devsecops-actions/sca@v1
+        uses: ministryofjustice/devsecops-actions/sca@v1.3.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
