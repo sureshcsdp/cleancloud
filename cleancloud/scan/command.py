@@ -15,6 +15,7 @@ from cleancloud.config.schema import (
     IgnoreTagRuleConfig,
     load_config,
 )
+from cleancloud.core.confidence import ConfidenceLevel
 from cleancloud.core.finding import Finding
 from cleancloud.filtering.tags import (
     compile_rules,
@@ -121,6 +122,12 @@ def scan(
 
         findings: List[Finding] = []
 
+        # Provider-specific metadata
+        region_selection_mode = None
+        regions_scanned = []
+        subscription_selection_mode = None
+        subscriptions_scanned = []
+
         if provider == "aws":
             region_selection_mode, findings, regions_scanned = scan_aws_with_region_selection(
                 profile=profile, region=region, all_regions=all_regions
@@ -129,11 +136,15 @@ def scan(
         elif provider == "azure":
             # Convert tuple to list for Azure
             subscription_list = list(subscription) if subscription else None
-            region_selection_mode, findings, regions_scanned = scan_azure_with_region_selection(
-                region=region,
-                subscriptions=subscription_list,
-                all_subscriptions=all_subscriptions,
+            subscription_selection_mode, findings, subscriptions_scanned = (
+                scan_azure_with_region_selection(
+                    region=region,
+                    subscriptions=subscription_list,
+                    all_subscriptions=all_subscriptions,
+                )
             )
+            # Extract unique regions from findings
+            regions_scanned = sorted(set(f.region for f in findings if f.region))
 
         ignored_count = 0
         rules = []
@@ -167,14 +178,22 @@ def scan(
         summary = build_summary(findings)
         summary["scanned_at"] = datetime.now(timezone.utc).isoformat()
         summary["regions_scanned"] = regions_scanned
-        summary["region_selection_mode"] = region_selection_mode
         summary["provider"] = provider
+
+        # Add provider-specific fields
+        if provider == "aws":
+            summary["region_selection_mode"] = region_selection_mode
+        elif provider == "azure":
+            summary["subscription_selection_mode"] = subscription_selection_mode
+            summary["subscriptions_scanned"] = subscriptions_scanned
         summary["highest_confidence"] = max(
             (f.confidence for f in findings),
             default=None,
             key=lambda c: CONFIDENCE_ORDER.get(c, 0),
         )
-        summary["high_conf_findings"] = len([f for f in findings if f.confidence == "HIGH"])
+        summary["high_conf_findings"] = len(
+            [f for f in findings if f.confidence == ConfidenceLevel.HIGH]
+        )
 
         if ignored_count > 0:
             summary["ignored_by_tag_policy"] = ignored_count
@@ -187,6 +206,7 @@ def scan(
         if output == "json":
             write_json(
                 {
+                    "schema_version": "1.0.0",
                     "summary": summary,
                     "findings": findings,
                 },

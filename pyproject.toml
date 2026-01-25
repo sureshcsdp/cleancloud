@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["aws", "azure", "cloud", "hygiene", "devops", "sre", "infrastructure", "security", "compliance", "enterprise", "ci-cd", "read-only"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Intended Audience :: Information Technology",

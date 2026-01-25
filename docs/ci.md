@@ -304,7 +304,7 @@ jobs:
 
 ## Output Formats
 
-### JSON Output (Machine-Readable)
+### JSON Output (Machine-Readable, Complete Data)
 
 ```bash
 cleancloud scan \
@@ -314,15 +314,18 @@ cleancloud scan \
   --output-file results.json
 ```
 
-The JSON output schema varies slightly between providers to accommodate their different organizational models (AWS regions vs Azure subscriptions).
+**JSON is the recommended format for programmatic processing** as it contains complete data including evidence and detailed metadata.
+
+The JSON output follows a versioned schema (see `schemas/output-v1.0.0.json`) and varies slightly between providers to accommodate their different organizational models (AWS regions vs Azure subscriptions).
 
 **AWS Schema Example:**
 ```json
 {
+  "schema_version": "1.0.0",
   "summary": {
     "total_findings": 12,
-    "by_risk": {"MEDIUM": 12},
-    "by_confidence": {"HIGH": 8, "MEDIUM": 4},
+    "by_risk": {"medium": 12},
+    "by_confidence": {"high": 8, "medium": 4},
     "regions_scanned": ["us-east-1", "us-west-2"],
     "region_selection_mode": "all-regions",
     "provider": "aws",
@@ -330,12 +333,26 @@ The JSON output schema varies slightly between providers to accommodate their di
   },
   "findings": [
     {
-      "rule_id": "aws.ebs.volume.unattached",
+      "provider": "aws",
+      "rule_id": "aws.ebs.unattached",
+      "resource_type": "aws.ebs.volume",
       "resource_id": "vol-0abc123",
-      "confidence": "HIGH",
-      "risk": "MEDIUM",
       "region": "us-east-1",
-      "details": {...}
+      "title": "Unattached EBS volume",
+      "summary": "EBS volume has been unattached for 90+ days",
+      "reason": "Volume has been in 'available' state for 90+ days",
+      "confidence": "high",
+      "risk": "medium",
+      "detected_at": "2025-01-15T10:30:00Z",
+      "details": {
+        "size_gb": 100,
+        "availability_zone": "us-east-1a"
+      },
+      "evidence": {
+        "signals_used": ["Volume state is 'available'", "Volume age is 90+ days"],
+        "signals_not_checked": ["Application-level usage", "IaC-managed intent"],
+        "time_window": "90 days"
+      }
     }
   ]
 }
@@ -344,10 +361,11 @@ The JSON output schema varies slightly between providers to accommodate their di
 **Azure Schema Example:**
 ```json
 {
+  "schema_version": "1.0.0",
   "summary": {
     "total_findings": 5,
-    "by_risk": {"LOW": 5},
-    "by_confidence": {"MEDIUM": 5},
+    "by_risk": {"low": 5},
+    "by_confidence": {"medium": 5},
     "regions_scanned": ["eastus", "westus2"],
     "subscriptions_scanned": ["29d91ee0-922f-483a-a81f-1a5eff4ecfa2"],
     "subscription_selection_mode": "all",
@@ -356,12 +374,26 @@ The JSON output schema varies slightly between providers to accommodate their di
   },
   "findings": [
     {
+      "provider": "azure",
       "rule_id": "azure.disk.unattached",
+      "resource_type": "azure.compute.disk",
       "resource_id": "/subscriptions/.../disks/disk1",
-      "confidence": "MEDIUM",
-      "risk": "LOW",
       "region": "eastus",
-      "details": {...}
+      "title": "Unattached managed disk",
+      "summary": "Disk has been unattached for 30+ days",
+      "reason": "Disk state is 'Unattached' for 30+ days",
+      "confidence": "medium",
+      "risk": "low",
+      "detected_at": "2025-01-15T10:30:00Z",
+      "details": {
+        "size_gb": 128,
+        "sku": "Premium_LRS"
+      },
+      "evidence": {
+        "signals_used": ["Disk state is 'Unattached'", "Disk age is 30+ days"],
+        "signals_not_checked": ["Application-level usage", "IaC-managed intent"],
+        "time_window": "30 days"
+      }
     }
   ]
 }
@@ -374,7 +406,7 @@ The JSON output schema varies slightly between providers to accommodate their di
 - Individual findings contain the Azure location in the `region` field (e.g., "eastus", "westeurope")
 - The `--region` parameter for Azure is a **filter** (filters findings by location), not a selection mode
 
-### CSV Output (Spreadsheet-Friendly)
+### CSV Output (Simplified, Spreadsheet-Friendly)
 
 ```bash
 cleancloud scan \
@@ -384,14 +416,26 @@ cleancloud scan \
   --output-file results.csv
 ```
 
-**Columns:**
-- rule_id
-- resource_id
-- confidence
-- risk
-- region
-- provider
-- details (JSON string)
+**CSV is a simplified format optimized for spreadsheet review.** It contains core fields for filtering and triaging, but omits nested data like `details` and `evidence`. For complete data including diagnostic information, use JSON output.
+
+**CSV Columns (in order):**
+1. `provider` - Cloud provider (aws, azure)
+2. `rule_id` - Detection rule identifier
+3. `resource_type` - Type of resource
+4. `resource_id` - Resource identifier
+5. `region` - Cloud region (or null for global resources)
+6. `title` - Human-readable finding title
+7. `summary` - One-line summary
+8. `reason` - Why the resource was flagged
+9. `risk` - Risk level (low, medium, high)
+10. `confidence` - Confidence level (low, medium, high)
+11. `detected_at` - ISO 8601 timestamp
+
+**Fields NOT included in CSV:**
+- `details` - Provider-specific metadata (e.g., size_gb, availability_zone)
+- `evidence` - Signal analysis (signals_used, signals_not_checked, time_window)
+
+**Use JSON output if you need:** Full diagnostic data, evidence signals, or programmatic processing.
 
 ---
 

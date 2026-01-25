@@ -45,7 +45,13 @@ def determine_exit_code(
         if not confidence:
             continue
 
-        if CONFIDENCE_ORDER.get(confidence.upper(), 0) >= threshold:
+        # Handle both ConfidenceLevel enum and string confidence
+        if hasattr(confidence, "value"):
+            confidence_str = confidence.value.upper()
+        else:
+            confidence_str = str(confidence).upper()
+
+        if CONFIDENCE_ORDER.get(confidence_str, 0) >= threshold:
             return EXIT_POLICY_VIOLATION
 
     return EXIT_OK
