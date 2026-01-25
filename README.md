@@ -225,13 +225,17 @@ cleancloud scan --provider aws --region us-east-1 --output csv --output-file res
 
 **JSON Output Schema:**
 
-AWS and Azure have slightly different schema structures:
-- **AWS**: `regions_scanned` contains AWS region names (e.g., `["us-east-1", "us-west-2"]`)
-- **Azure**:
-  - `regions_scanned` contains Azure location names (e.g., `["eastus", "westus2"]`)
-  - `subscriptions_scanned` contains subscription IDs (e.g., `["29d91ee0-..."]`)
+CleanCloud uses a versioned JSON schema (current: `1.0.0`). All JSON output includes a `schema_version` field for backward compatibility.
 
-See [`docs/ci.md#json-output-machine-readable`](docs/ci.md#json-output-machine-readable) for complete schema examples.
+- **Schema Definition**: [`schemas/output-v1.0.0.json`](schemas/output-v1.0.0.json)
+- **Complete Examples**: [`docs/ci.md#json-output-machine-readable`](docs/ci.md#json-output-machine-readable)
+
+AWS and Azure have slightly different summary structures:
+- **AWS**: Uses `region_selection_mode` with values `"explicit"` or `"all-regions"`
+- **Azure**: Uses `subscription_selection_mode` with values `"explicit"` or `"all"`, plus `subscriptions_scanned` array
+
+**CSV Output:**
+CSV is a simplified format containing core fields (11 columns) for spreadsheet review. Use JSON for complete data including evidence and diagnostic details.
 
 ---
 
