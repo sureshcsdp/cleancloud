@@ -25,7 +25,10 @@ def test_exit_policy_medium_only():
 
 def test_exit_policy_high_only():
     results = [FakeResult(confidence="High")]
-    assert determine_exit_code(results) == 2
+    # Default behavior: report-only (don't fail)
+    assert determine_exit_code(results) == 0
+    # With explicit flag: fail on HIGH
+    assert determine_exit_code(results, fail_on_confidence="HIGH") == 2
 
 
 def test_exit_policy_mixed_low_medium():
@@ -41,7 +44,12 @@ def test_exit_policy_mixed_medium_high():
         FakeResult(confidence="Medium"),
         FakeResult(confidence="High"),
     ]
-    assert determine_exit_code(results) == 2
+    # Default behavior: report-only (don't fail)
+    assert determine_exit_code(results) == 0
+    # With explicit flag: fail on HIGH
+    assert determine_exit_code(results, fail_on_confidence="HIGH") == 2
+    # With explicit flag: fail on MEDIUM or higher
+    assert determine_exit_code(results, fail_on_confidence="MEDIUM") == 2
 
 
 def test_exit_policy_all_levels():
@@ -50,4 +58,13 @@ def test_exit_policy_all_levels():
         FakeResult(confidence="Medium"),
         FakeResult(confidence="High"),
     ]
-    assert determine_exit_code(results) == 2
+    # Default behavior: report-only (don't fail)
+    assert determine_exit_code(results) == 0
+    # With explicit flag: fail on HIGH
+    assert determine_exit_code(results, fail_on_confidence="HIGH") == 2
+    # With explicit flag: fail on MEDIUM or higher
+    assert determine_exit_code(results, fail_on_confidence="MEDIUM") == 2
+    # With explicit flag: fail on LOW or higher (all findings)
+    assert determine_exit_code(results, fail_on_confidence="LOW") == 2
+    # With fail_on_findings: fail on any finding
+    assert determine_exit_code(results, fail_on_findings=True) == 2
