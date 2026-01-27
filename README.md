@@ -34,6 +34,23 @@ CleanCloud helps teams **reduce cloud costs** by safely identifying orphaned, un
 
 CleanCloud is designed for enterprise environments where security review and approval are required.
 
+### Why InfoSec Teams Trust CleanCloud
+
+**Verifiable Read-Only Design:**
+- 🔒 **IAM Proof Pack**: Audit a 30-line JSON policy, not our code
+- 🎫 **OIDC-First**: Temporary credentials, no secrets stored
+- ✅ **Cloud-Enforced**: AWS/Azure guarantees read-only, not us
+- 🛡️ **Conservative Detection**: MEDIUM confidence by default, age thresholds, explicit evidence
+
+**How It Works:**
+1. You create a read-only IAM role (we provide the JSON policy)
+2. Run our verification script to prove it's safe
+3. CleanCloud scans using temporary OIDC tokens
+4. Results are yours - we never see your data
+
+**The Trust Model:**
+> "By requiring a separate, verifiable Read-Only IAM role, CleanCloud shifts trust from our code to your Cloud Provider's enforcement. InfoSec teams don't need to audit our Python code line-by-line—they audit a 30-line JSON policy and verify it's read-only."
+
 ### Read-Only by Design
 
 **No destructive permissions required:**
@@ -116,16 +133,29 @@ CleanCloud is designed to be approved by security teams, not bypassed.
 
 ### Exit Codes
 
+**Safe by Default:** CleanCloud reports findings but exits with code `0` (success) unless you explicitly configure failure conditions.
+
 | Code | Meaning |
 |------|---------|
-| `0` | Scan completed successfully, no blocking findings |
+| `0` | Scan completed successfully (default: findings reported but don't fail) |
 | `1` | Configuration error, invalid region/location, or unexpected error |
-| `2` | Policy violation (findings detected with `--fail-on-findings` or `--fail-on-confidence`) |
+| `2` | Policy violation (only when using `--fail-on-findings` or `--fail-on-confidence`) |
 | `3` | Missing permissions or invalid credentials |
 
-**Example:** Enforce policy on high-confidence findings only
+**Examples:**
+
 ```bash
+# Default: Reports findings, exits 0 (safe for any pipeline)
+cleancloud scan --provider aws --region us-east-1
+
+# Fail on HIGH confidence findings only
 cleancloud scan --provider aws --region us-east-1 --fail-on-confidence HIGH
+
+# Fail on MEDIUM or higher confidence
+cleancloud scan --provider aws --region us-east-1 --fail-on-confidence MEDIUM
+
+# Fail on ANY findings (strict mode)
+cleancloud scan --provider aws --region us-east-1 --fail-on-findings
 ```
 
 ## Quick Start
@@ -254,7 +284,8 @@ CleanCloud is designed for CI/CD environments with OIDC authentication (no secre
 **Key Differences from Local Usage:**
 - Uses OIDC (OpenID Connect) instead of CLI credentials
 - No long-lived secrets stored in CI
-- Designed for policy enforcement via exit codes (`--fail-on-confidence`)
+- Safe by default: exits 0 even with findings (won't block deployments)
+- Opt-in strict mode with `--fail-on-confidence` or `--fail-on-findings` flags
 
 ### Quick Example: GitHub Actions with AWS
 
@@ -282,8 +313,9 @@ jobs:
             --provider aws \
             --region us-east-1 \
             --output json \
-            --output-file scan.json \
-            --fail-on-confidence HIGH
+            --output-file scan.json
+            # Default: Reports findings, exits 0 (safe, won't fail deployment)
+            # Add --fail-on-confidence HIGH to enforce strict policy
 ```
 
 ### Quick Example: GitHub Actions with Azure
@@ -312,8 +344,9 @@ jobs:
           cleancloud scan \
             --provider azure \
             --output json \
-            --output-file scan.json \
-            --fail-on-confidence HIGH
+            --output-file scan.json
+            # Default: Reports findings, exits 0 (safe, won't fail deployment)
+            # Add --fail-on-confidence HIGH to enforce strict policy
 ```
 
 **Complete CI/CD documentation:** See [`docs/ci.md`](docs/ci.md) for detailed setup instructions.
@@ -336,35 +369,47 @@ Each rule:
 
 ### Policy Enforcement
 
-Control pipeline behavior based on finding confidence levels:
+**Default Behavior:** CleanCloud reports findings but **does not fail builds** (exits 0). This makes it safe for scheduled scans, CI/CD pipelines, and exploratory runs.
 
-**AWS Examples:**
+**Opt-in strict mode with explicit flags:**
 
 ```bash
-# Fail only on HIGH confidence findings (recommended)
+# Default: Report findings, don't fail builds (exit 0)
+cleancloud scan --provider aws --region us-east-1
+
+# Fail on HIGH confidence findings
 cleancloud scan --provider aws --region us-east-1 --fail-on-confidence HIGH
 
 # Fail on MEDIUM or higher confidence
 cleancloud scan --provider aws --region us-east-1 --fail-on-confidence MEDIUM
 
-# Fail on any findings (strict mode, not recommended)
+# Fail on LOW or higher (all findings by confidence)
+cleancloud scan --provider aws --region us-east-1 --fail-on-confidence LOW
+
+# Fail on ANY findings (strict mode, ignores confidence levels)
 cleancloud scan --provider aws --region us-east-1 --fail-on-findings
 ```
 
 **Azure Examples:**
 
 ```bash
-# Fail only on HIGH confidence findings (recommended)
+# Default: Report findings, don't fail builds (exit 0)
+cleancloud scan --provider azure
+
+# Fail on HIGH confidence findings
 cleancloud scan --provider azure --fail-on-confidence HIGH
 
 # Fail on MEDIUM or higher confidence
 cleancloud scan --provider azure --fail-on-confidence MEDIUM
 
-# Fail on any findings (strict mode, not recommended)
+# Fail on LOW or higher (all findings by confidence)
+cleancloud scan --provider azure --fail-on-confidence LOW
+
+# Fail on ANY findings (strict mode, ignores confidence)
 cleancloud scan --provider azure --fail-on-findings
 
 # With specific subscription
-cleancloud scan --provider azure --subscription <subscription-id> --fail-on-confidence HIGH
+cleancloud scan --provider azure --subscription <subscription-id>
 ```
 
 **Note:** Policy enforcement works identically for both AWS and Azure providers.
