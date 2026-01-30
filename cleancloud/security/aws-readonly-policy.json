@@ -9,6 +9,7 @@
         "ec2:DescribeTags",
         "ec2:DescribeInstances",
         "ec2:DescribeAddresses",
+        "ec2:DescribeNetworkInterfaces",
         "ec2:DescribeRegions",
         "s3:ListAllMyBuckets",
         "s3:GetBucketLocation",

@@ -14,6 +14,7 @@ from cleancloud.providers.aws.rules.ebs_unattached import find_unattached_ebs_vo
 from cleancloud.providers.aws.rules.elastic_ip_unattached import (
     find_unattached_elastic_ips,
 )
+from cleancloud.providers.aws.rules.eni_detached import find_detached_enis
 from cleancloud.providers.aws.rules.untagged_resources import (
     find_untagged_resources as find_aws_untagged_resources,
 )
@@ -25,6 +26,7 @@ AWS_RULES: List[Callable] = [
     find_old_ebs_snapshots,
     find_inactive_cloudwatch_logs,
     find_unattached_elastic_ips,
+    find_detached_enis,
     find_aws_untagged_resources,
 ]
 
@@ -49,7 +51,7 @@ def scan_aws_with_region_selection(
         if regions_to_scan:
             click.echo(f"✓ Found {len(regions_to_scan)} active regions:")
             click.echo(f"   {', '.join(regions_to_scan)}")
-            click.echo("   (Regions with EBS volumes, snapshots, or logs)")
+            click.echo("   (Regions with EBS volumes, snapshots, logs, Elastic IPs, or ENIs)")
         else:
             click.echo("⚠️  No active regions detected")
             click.echo("   Falling back to us-east-1")
@@ -72,47 +74,44 @@ def _get_active_aws_regions(session) -> List[str]:
             AllRegions=False,
             Filters=[{"Name": "opt-in-status", "Values": ["opt-in-not-required", "opted-in"]}],
         )
-
-        enabled_regions = [r["RegionName"] for r in response["Regions"]]
-        active_regions: List[str] = []
-        errors: List[Tuple[str, str]] = []
-
-        # Bound concurrency to avoid throttling
-        max_workers = min(8, len(enabled_regions))
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(_region_has_cleancloud_resources, session, region): region
-                for region in enabled_regions
-            }
-
-            for future in as_completed(futures):
-                region = futures[future]
-                try:
-                    has_resources, error = future.result()
-                    if has_resources:
-                        active_regions.append(region)
-                    elif error:
-                        errors.append((region, error))
-                except Exception as e:
-                    errors.append((region, str(e)))
-
-        # Optional: user-facing error summary (unchanged behaviour)
-        if errors:
-            import click
-
-            click.echo()
-            click.echo(f"⚠️  Could not check {len(errors)} region(s):")
-            for region, error in errors[:5]:
-                click.echo(f"   • {region}: {error[:80]}")
-            if len(errors) > 5:
-                click.echo(f"   ... and {len(errors) - 5} more")
-            click.echo()
-
-        return sorted(active_regions)
-
-    except Exception:
+    except Exception as e:
+        click.echo(f"⚠️  Failed to list AWS regions: {e}")
         return []
+
+    enabled_regions = [r["RegionName"] for r in response["Regions"]]
+    active_regions: List[str] = []
+    errors: List[Tuple[str, str]] = []
+
+    # Bound concurrency to avoid throttling
+    max_workers = min(8, len(enabled_regions))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_region_has_cleancloud_resources, session, region): region
+            for region in enabled_regions
+        }
+
+        for future in as_completed(futures):
+            region = futures[future]
+            try:
+                has_resources, error = future.result()
+                if has_resources:
+                    active_regions.append(region)
+                elif error:
+                    errors.append((region, error))
+            except Exception as e:
+                errors.append((region, str(e)))
+
+    if errors:
+        click.echo()
+        click.echo(f"⚠️  Could not check {len(errors)} region(s):")
+        for region, error in errors[:5]:
+            click.echo(f"   • {region}: {error[:80]}")
+        if len(errors) > 5:
+            click.echo(f"   ... and {len(errors) - 5} more")
+        click.echo()
+
+    return sorted(active_regions)
 
 
 def _region_has_cleancloud_resources(session, region: str) -> tuple[bool, Optional[str]]:
@@ -135,6 +134,17 @@ def _region_has_cleancloud_resources(session, region: str) -> tuple[bool, Option
         logs = session.client("logs", region_name=region)
         log_groups = logs.describe_log_groups(limit=1)
         if log_groups["logGroups"]:
+            return True, None
+
+        # 4. Check Elastic IPs
+        # DescribeAddresses is non-paginated, returns all EIPs in one call
+        addresses = ec2.describe_addresses()
+        if addresses["Addresses"]:
+            return True, None
+
+        # 5. Check Network Interfaces (ENIs)
+        enis = ec2.describe_network_interfaces(MaxResults=5)
+        if enis["NetworkInterfaces"]:
             return True, None
 
         # No resources found - this is OK, just an empty region

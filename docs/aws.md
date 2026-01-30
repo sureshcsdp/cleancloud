@@ -110,6 +110,7 @@ Attach this policy to your IAM role or user:
         "ec2:DescribeSnapshots",
         "ec2:DescribeInstances",
         "ec2:DescribeAddresses",
+        "ec2:DescribeNetworkInterfaces",
         "ec2:DescribeRegions",
         "ec2:DescribeAvailabilityZones",
         "ec2:DescribeTags"
@@ -248,6 +249,7 @@ Authentication Method: OIDC (AssumeRoleWithWebIdentity)
 ✅ ✓ ec2:DescribeSnapshots
 ✅ ✓ ec2:DescribeRegions
 ✅ ✓ ec2:DescribeAddresses
+✅ ✓ ec2:DescribeNetworkInterfaces
 ✅ ✓ logs:DescribeLogGroups
 ✅ ✓ s3:ListAllMyBuckets
 

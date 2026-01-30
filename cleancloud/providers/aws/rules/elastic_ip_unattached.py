@@ -16,13 +16,18 @@ def find_unattached_elastic_ips(
     days_unattached: int = 30,
 ) -> List[Finding]:
     """
-    Find Elastic IPs that are not attached to any instance for 30+ days.
+    Find Elastic IPs allocated 30+ days ago and currently unattached.
 
-    Unattached Elastic IPs cost $0.005/hour (~$3.60/month) when not associated.
+    Unattached Elastic IPs incur small hourly charges when not associated.
+
+    IMPORTANT: AWS does not expose "unattached since" timestamp, so we use
+    allocation age as a proxy. An EIP allocated 30+ days ago and currently
+    unattached is worth reviewing.
 
     SAFE RULE (review-only):
     - EIP does not have AssociationId (not attached)
-    - EIP age >= days_unattached threshold
+    - EIP allocation age >= days_unattached threshold (NOT unattached duration)
+    - Classic EIPs without AllocationTime are flagged immediately (conservative)
 
     IAM permissions:
     - ec2:DescribeAddresses
@@ -33,7 +38,8 @@ def find_unattached_elastic_ips(
     findings: List[Finding] = []
 
     try:
-        # Note: describe_addresses is not pageable
+        # DescribeAddresses is non-paginated by AWS (no paginator exists).
+        # Returns all Elastic IPs in a single call.
         response = ec2.describe_addresses()
         for eip in response.get("Addresses", []):
             # Skip if attached to an instance or network interface
@@ -42,9 +48,16 @@ def find_unattached_elastic_ips(
 
             # Calculate age since allocation
             allocation_time = eip.get("AllocationTime")
+            domain = eip.get("Domain", "vpc")
+            is_classic = domain == "standard"
+
             if not allocation_time:
-                # Classic EIPs might not have AllocationTime, skip age check
-                age_days = None
+                if is_classic:
+                    # Genuine EC2-Classic EIP without AllocationTime — flag conservatively
+                    age_days = None
+                else:
+                    # VPC EIP without AllocationTime — cannot determine age, skip
+                    continue
             else:
                 age_days = (now - allocation_time).days
 
@@ -56,24 +69,38 @@ def find_unattached_elastic_ips(
             signals_used = ["Elastic IP is not associated with any instance or network interface"]
             if age_days is not None:
                 signals_used.append(
-                    f"Elastic IP has been unattached for {age_days} days, exceeding threshold of {days_unattached} days"
+                    f"Elastic IP was allocated {age_days} days ago and is currently unattached"
+                )
+            if is_classic:
+                signals_used.append(
+                    "Classic EIP without AllocationTime (age unknown, flagged conservatively)"
+                )
+                signals_used.append(
+                    "EC2-Classic is deprecated; unattached Classic EIPs are almost always legacy leftovers"
                 )
 
             evidence = Evidence(
                 signals_used=signals_used,
                 signals_not_checked=[
+                    "Unattached duration (AWS does not expose detach timestamp)",
+                    "Previous attachment history",
                     "Application-level usage",
                     "Manual operational workflows",
                     "Future planned attachments",
                     "Disaster recovery intent",
                 ],
-                time_window=f"{days_unattached} days",
+                time_window=(
+                    f"{days_unattached} days since allocation"
+                    if age_days is not None
+                    else "Unknown (Classic EIP, no AllocationTime)"
+                ),
             )
 
             # Build details
             details = {
                 "public_ip": eip.get("PublicIp"),
                 "domain": eip.get("Domain", "vpc"),
+                "is_classic": is_classic,
             }
 
             if age_days is not None:
@@ -88,21 +115,21 @@ def find_unattached_elastic_ips(
                     provider="aws",
                     rule_id="aws.ec2.elastic_ip.unattached",
                     resource_type="aws.ec2.elastic_ip",
-                    resource_id=eip["AllocationId"],
+                    resource_id=eip.get("AllocationId") or eip.get("PublicIp"),
                     region=region,
-                    title="Unattached Elastic IP",
+                    title="Unattached Elastic IP (Review Recommended)",
                     summary=(
-                        f"Elastic IP unattached for {age_days} days (costs $3.60/month)"
-                        if age_days
-                        else "Elastic IP not attached to any instance"
+                        f"Elastic IP allocated {age_days} days ago and currently unattached (incurs hourly charges)"
+                        if age_days is not None
+                        else "Classic Elastic IP currently unattached (incurs hourly charges, allocation age unknown)"
                     ),
                     reason=(
-                        f"Elastic IP has been unattached for {age_days} days, incurring charges"
-                        if age_days
-                        else "Elastic IP not attached, incurring charges"
+                        f"Elastic IP is {age_days} days old and currently unattached, incurring charges"
+                        if age_days is not None
+                        else "Classic Elastic IP currently unattached, incurring charges (allocation age unknown)"
                     ),
                     risk=RiskLevel.LOW,
-                    confidence=ConfidenceLevel.HIGH,  # Clear signal: unattached EIPs cost money
+                    confidence=ConfidenceLevel.HIGH,  # Deterministic state: no AssociationId
                     detected_at=now,
                     evidence=evidence,
                     details=details,
