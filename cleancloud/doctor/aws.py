@@ -371,6 +371,14 @@ def run_aws_doctor(profile: Optional[str], region: Optional[str] = None) -> None
             permissions_failed.append(("ec2:DescribeRegions", str(e)))
             warn(f"✗ ec2:DescribeRegions - {e}")
 
+        try:
+            ec2.describe_addresses()
+            permissions_tested.append("ec2:DescribeAddresses")
+            success("✓ ec2:DescribeAddresses")
+        except Exception as e:
+            permissions_failed.append(("ec2:DescribeAddresses", str(e)))
+            warn(f"✗ ec2:DescribeAddresses - {e}")
+
         # Test CloudWatch Logs permissions
         try:
             logs = session.client("logs", region_name=region)

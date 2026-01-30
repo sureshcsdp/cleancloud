@@ -63,7 +63,7 @@ def find_unused_public_ips(
                 summary="Public IP is not attached to any resource",
                 reason="IP configuration is None (not attached)",
                 risk=RiskLevel.LOW,
-                confidence=ConfidenceLevel.MEDIUM,  # conservative
+                confidence=ConfidenceLevel.MEDIUM,
                 detected_at=datetime.now(timezone.utc),
                 evidence=evidence,
                 details={

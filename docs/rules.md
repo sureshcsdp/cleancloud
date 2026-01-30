@@ -31,7 +31,7 @@ Every finding includes a confidence level:
 
 ---
 
-## AWS Rules (4 Total)
+## AWS Rules (5 Total)
 
 ### 1. Unattached EBS Volumes
 
@@ -138,6 +138,45 @@ Confidence thresholds and signal weighting are documented in [confidence.md](con
 - `ec2:DescribeVolumes`
 - `s3:GetBucketTagging`
 - `logs:ListTagsLogGroup`
+
+---
+
+### 5. Unattached Elastic IPs
+
+**Rule ID:** `aws.ec2.elastic_ip.unattached`
+
+**What it detects:** Elastic IPs not attached to any EC2 instance or network interface for 30+ days
+
+**Confidence:**
+
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
+
+- **HIGH:** Unattached ≥ 30 days (deterministic state + clear cost signal)
+
+**Why this matters:**
+- Unattached Elastic IPs cost **$0.005/hour** (~**$3.60/month**)
+- State is deterministic (no `AssociationId` means not attached)
+- Clear cost optimization signal with zero ambiguity
+
+**Detection logic:**
+```python
+if "AssociationId" not in eip:  # Not attached
+    age_days = (now - eip["AllocationTime"]).days
+    if age_days >= 30:
+        confidence = "HIGH"
+```
+
+**Common causes:**
+- Elastic IPs from terminated EC2 instances
+- Reserved IPs for DR that are no longer needed
+- Failed deployments leaving orphaned IPs
+- Manual allocation without attachment
+
+**Edge cases handled:**
+- Classic EIPs without `AllocationTime` are flagged immediately (conservative)
+- 30-day threshold avoids false positives from temporary allocations
+
+**Required permission:** `ec2:DescribeAddresses`
 
 ---
 
@@ -262,7 +301,6 @@ This guarantees trust for long-running CI/CD integrations.
 ## Coming Soon
 
 **AWS:**
-- Unused Elastic IPs
 - Old AMIs (>180 days)
 - Unused EBS encryption keys
 
