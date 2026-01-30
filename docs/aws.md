@@ -109,6 +109,7 @@ Attach this policy to your IAM role or user:
         "ec2:DescribeVolumes",
         "ec2:DescribeSnapshots",
         "ec2:DescribeInstances",
+        "ec2:DescribeAddresses",
         "ec2:DescribeRegions",
         "ec2:DescribeAvailabilityZones",
         "ec2:DescribeTags"
@@ -245,6 +246,8 @@ Authentication Method: OIDC (AssumeRoleWithWebIdentity)
 🔒 Read-Only Permission Validation
 ✅ ✓ ec2:DescribeVolumes
 ✅ ✓ ec2:DescribeSnapshots
+✅ ✓ ec2:DescribeRegions
+✅ ✓ ec2:DescribeAddresses
 ✅ ✓ logs:DescribeLogGroups
 ✅ ✓ s3:ListAllMyBuckets
 

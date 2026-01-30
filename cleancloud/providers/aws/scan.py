@@ -11,6 +11,9 @@ from cleancloud.providers.aws.rules.cloudwatch_inactive import (
 )
 from cleancloud.providers.aws.rules.ebs_snapshot_old import find_old_ebs_snapshots
 from cleancloud.providers.aws.rules.ebs_unattached import find_unattached_ebs_volumes
+from cleancloud.providers.aws.rules.elastic_ip_unattached import (
+    find_unattached_elastic_ips,
+)
 from cleancloud.providers.aws.rules.untagged_resources import (
     find_untagged_resources as find_aws_untagged_resources,
 )
@@ -21,6 +24,7 @@ AWS_RULES: List[Callable] = [
     find_unattached_ebs_volumes,
     find_old_ebs_snapshots,
     find_inactive_cloudwatch_logs,
+    find_unattached_elastic_ips,
     find_aws_untagged_resources,
 ]
 
