@@ -8,6 +8,7 @@ from cleancloud.providers.aws.rules.cloudwatch_inactive import find_inactive_clo
 from cleancloud.providers.aws.rules.ebs_snapshot_old import find_old_ebs_snapshots
 from cleancloud.providers.aws.rules.ebs_unattached import find_unattached_ebs_volumes
 from cleancloud.providers.aws.rules.elastic_ip_unattached import find_unattached_elastic_ips
+from cleancloud.providers.aws.rules.eni_detached import find_detached_enis
 from cleancloud.providers.aws.rules.untagged_resources import find_untagged_resources
 
 
@@ -22,6 +23,7 @@ def test_aws_rules_run_without_error():
         find_old_ebs_snapshots(session, region),
         find_inactive_cloudwatch_logs(session, region),
         find_unattached_elastic_ips(session, region),
+        find_detached_enis(session, region),
         find_untagged_resources(session, region),
     ]
 

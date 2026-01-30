@@ -31,7 +31,7 @@ Every finding includes a confidence level:
 
 ---
 
-## AWS Rules (5 Total)
+## AWS Rules (6 Total)
 
 ### 1. Unattached EBS Volumes
 
@@ -145,25 +145,30 @@ Confidence thresholds and signal weighting are documented in [confidence.md](con
 
 **Rule ID:** `aws.ec2.elastic_ip.unattached`
 
-**What it detects:** Elastic IPs not attached to any EC2 instance or network interface for 30+ days
+**What it detects:** Elastic IPs allocated 30+ days ago and currently unattached
 
 **Confidence:**
 
 Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
 
-- **HIGH:** Unattached ≥ 30 days (deterministic state + clear cost signal)
+- **HIGH:** Allocated ≥ 30 days ago and currently unattached (deterministic state)
+
+**Important limitation:**
+- AWS does not expose "unattached since" timestamp
+- We measure allocation age as a proxy
+- An EIP could have been attached until recently (we can't tell)
 
 **Why this matters:**
-- Unattached Elastic IPs cost **$0.005/hour** (~**$3.60/month**)
+- Unattached Elastic IPs incur small hourly charges
 - State is deterministic (no `AssociationId` means not attached)
 - Clear cost optimization signal with zero ambiguity
 
 **Detection logic:**
 ```python
 if "AssociationId" not in eip:  # Not attached
-    age_days = (now - eip["AllocationTime"]).days
+    age_days = (now - eip["AllocationTime"]).days  # Allocation age, NOT unattached duration
     if age_days >= 30:
-        confidence = "HIGH"
+        confidence = "HIGH"  # Deterministic state: no AssociationId
 ```
 
 **Common causes:**
@@ -173,10 +178,79 @@ if "AssociationId" not in eip:  # Not attached
 - Manual allocation without attachment
 
 **Edge cases handled:**
-- Classic EIPs without `AllocationTime` are flagged immediately (conservative)
+- Classic EIPs without `AllocationTime` are flagged immediately (conservative) and annotated as `is_classic: true` in details
 - 30-day threshold avoids false positives from temporary allocations
+- Uses allocation age as proxy for unattached duration (unavoidable with AWS API)
 
 **Required permission:** `ec2:DescribeAddresses`
+
+---
+
+### 6. Detached Network Interfaces (ENIs)
+
+**Rule ID:** `aws.ec2.eni.detached`
+
+**What it detects:** Elastic Network Interfaces (ENIs) currently detached and 60+ days old
+
+**Confidence:**
+
+Confidence thresholds and signal weighting are documented in [confidence.md](confidence.md).
+
+- **MEDIUM:** ENI created ≥ 60 days ago and currently detached
+
+**Important limitation:**
+- AWS does not expose "detached since" timestamp
+- We measure ENI creation age as a conservative proxy
+- An ENI could have been attached until recently (we can't tell)
+
+**Why this matters:**
+- Detached ENIs incur small hourly charges
+- Often forgotten after failed deployments or incomplete teardowns
+- Clear signal with minimal ambiguity
+
+**Detection logic:**
+```python
+if eni['Status'] == 'available':  # Currently detached
+    # Exclude AWS infrastructure using InterfaceType
+    if eni['InterfaceType'] not in ['nat_gateway', 'load_balancer', 'vpc_endpoint', ...]:
+        age_days = (now - eni['CreateTime']).days  # Creation age, NOT detached duration
+        if age_days >= 60:  # Conservative threshold
+            confidence = "MEDIUM"  # Medium because we can't measure detached duration
+```
+
+**What gets flagged:**
+- ✅ User-created ENIs (InterfaceType='interface')
+- ✅ **Lambda/ECS/RDS ENIs** (RequesterManaged=true but YOUR resources!) — explicitly annotated in evidence and details
+- ✅ Detached ENIs from deleted services
+
+**AWS infrastructure ENIs (excluded):**
+- ❌ NAT Gateways (InterfaceType='nat_gateway')
+- ❌ Load Balancers (InterfaceType='load_balancer')
+- ❌ VPC Endpoints (InterfaceType='vpc_endpoint')
+- ❌ Gateway Load Balancers
+
+**Key insight:** `RequesterManaged=true` means "AWS created this in YOUR VPC for YOUR resource" — these ARE your responsibility and often waste. RequesterManaged ENIs are included in findings with an explicit evidence signal and `requester_managed: true` in details for downstream filtering.
+
+**Common causes:**
+- Failed EC2 instance launches
+- Incomplete infrastructure teardown
+- Terminated instances with retained ENIs
+- Forgotten manual ENI creations
+
+**Edge cases handled:**
+- Uses creation age (60+ days) as proxy for detached duration
+- 60-day threshold is conservative to reduce false positives
+- Could flag ENIs that were attached until recently (unavoidable with AWS API)
+- Flags ENIs without tags (ownership unclear signal)
+- AWS Hyperplane ENI reuse behavior listed as signal not checked (undocumented retention)
+- `interface_type` and `requester_managed` included in details for CI/CD filtering
+
+**Why 60 days (not 30):**
+- We measure creation age, not detached duration
+- Longer threshold reduces false positives
+- If an ENI is 60+ days old and currently detached, it's worth reviewing
+
+**Required permission:** `ec2:DescribeNetworkInterfaces`
 
 ---
 
